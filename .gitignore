@@ -2,3 +2,6 @@ target/**
 logs.log
 .vscode/**
 Cargo.lock
+ui/node_modules
+ui/dist
+ui/pnpm-lock.yaml
