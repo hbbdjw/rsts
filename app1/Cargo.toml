@@ -1,0 +1,63 @@
+[package]
+name = "app1"
+version = "0.1.0"
+edition = "2024"
+
+# 主要依赖项
+[dependencies]
+tokio = { version = "1.49.0", features = ["full"] }
+futures = "0.3.31"
+rusqlite = { version = "0.38.0", features = ["bundled"] }
+actix = "0.13.5"
+actix-web = "4.12.1"
+actix-rt = "2.11.0"
+actix-web-actors = "4.3.0"
+axum = { version = "0.8.8", features = ["ws", "json"] }
+sqlx = { version = "0.8.6", default-features = false, features = ["postgres", "runtime-tokio"] }
+tower-http = { version = "0.6.8", features = ["cors", "trace"] }
+dotenvy = "0.15.7"
+bcrypt = "0.18.0"
+jsonwebtoken = { version = "10.3.0", features = ["rust_crypto"] }
+rand = "0.8"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
+uuid = { version = "1.20.0", features = ["v4"] }
+env_logger = "0.11.8"
+log = "0.4.29"
+toml = "0.9.8"
+tokio-cron-scheduler = "*"
+num_cpus = "1.17.0"
+chrono-tz = "0.10.4"
+chrono = "0.4.43"
+actix-files = "0.6.10" # 用于静态文件服务
+anyhow = "1.0.101" # 错误处理库
+reqwest = { version = "0.13.2", features = ["json", "rustls"] } # 用于HTTP请求转发
+regex = "1.12.3" # 用于正则表达式匹配
+bytes = "1.11.1" 
+image = "0.25.9"
+rayon = "1.11.0"
+russh = "0.57.0"
+russh-keys = "0.49.2"
+async-trait = "0.1.89"
+thiserror = "2.0.18"
+libc = "0.2.181"
+base64 = "0.22.1"
+ssh2 = "0.9.5"
+postgres = "0.19.12"
+tokio-postgres = "0.7.16"
+flate2 = "1.1.9"
+jni = "0.21.1"
+bincode = "1.3.3"
+
+[features]
+simd = []
+
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3.9", features = ["winuser"] }
+
+[lib]
+name = "app1_core"
+path = "src/lib.rs"
+[[bin]]
+name = "app1"
+path = "src/main.rs"

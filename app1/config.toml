@@ -1,0 +1,64 @@
+# RSTS 项目配置文件
+
+[server]
+enable = true
+port = 8000
+host = "0.0.0.0"
+database_path = "F:/yuanma/rust/rsts/app1/db/rsts.db"
+
+[static_files]
+root_dir = "F:/yuanma/rust/rsts/ui/soybean-admin/dist/"
+allowed_extensions = "html,css,js,png"
+
+[scheduled_task]
+enable = false
+
+[scheduled_task.task_1]
+cron_expression = "* * * * *"
+description = "每分钟执行一次的示例任务"
+
+# 代理配置
+[proxy]
+enable = true
+
+[[proxy.rules]]
+path_prefix = ""
+target_url = "http://127.0.0.1:9103/"
+pattern = "/yebt/*"
+
+[[proxy.rules]]
+path_prefix = "/api/external"
+target_url = "http://127.0.0.1:9103"
+pattern = ""
+
+# TCP代理配置
+[tcp_proxy]
+enable = true
+port = 7070
+[[tcp_proxy.rules]]
+local_port = 7071
+remote_addresses = ["192.168.137.26:6379", "127.0.0.1:6380"]
+pattern = ""
+
+# 轮询负载均衡示例
+[[tcp_proxy.rules]]
+local_port = 8082
+remote_addresses = ["127.0.0.1:9001", "127.0.0.1:9002", "127.0.0.1:9003"]
+pattern = ""
+
+# WebSocket配置
+[websocket]
+enabled = true
+path = "/ws"
+heartbeat_interval = 5
+max_frame_size = 65536
+max_connections = 100
+
+# 日志配置
+[log]
+file_path = "logs.log"
+# 日志级别 (debug, info, warn, error)
+level = "info"
+
+
+

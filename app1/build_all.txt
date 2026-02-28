@@ -1,0 +1,4 @@
+cargo build --release --target x86_64-pc-windows-msvc
+cargo build --target x86_64-unknown-linux-musl
+或
+cargo build --target x86_64-unknown-linux-musl --release 发布构建
