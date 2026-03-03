@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
-import { NButton, NModal } from 'naive-ui';
+import { NButton } from 'naive-ui';
 import { VueMonacoEditor } from '@guolao/vue-monaco-editor';
+import XModal from '@/components/xmodal/index.vue';
 
 interface Props {
   show: boolean;
   filename: string;
   content: string;
   loading?: boolean;
+  zIndex?: number;
 }
 
 interface Emits {
@@ -89,12 +91,13 @@ const handleSave = () => {
 </script>
 
 <template>
-  <NModal
+  <XModal
     v-model:show="visible"
     preset="card"
     :title="`编辑文件: ${filename}`"
     class="h-80vh w-80vw"
     :mask-closable="false"
+    :z-index="zIndex ?? 3000"
     :on-close="handleClose"
   >
     <div class="h-full flex flex-col gap-4">
@@ -112,7 +115,7 @@ const handleSave = () => {
         <NButton type="primary" :loading="loading" @click="handleSave">保存</NButton>
       </div>
     </div>
-  </NModal>
+  </XModal>
 </template>
 
 <style scoped>

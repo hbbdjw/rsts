@@ -92,5 +92,43 @@ export const generatedRoutes: GeneratedRoute[] = [
       title: 'Test',
       i18nKey: 'route.testbox'
     }
+  },
+  {
+    name: 'tools',
+    path: '/tools',
+    component: 'layout.base',
+    meta: {
+      title: 'tools',
+      i18nKey: 'route.tools'
+    },
+    children: [
+      {
+        name: 'tools_aichat',
+        path: '/tools/aichat',
+        component: 'view.tools_aichat',
+        meta: {
+          title: 'tools_aichat',
+          i18nKey: 'route.tools_aichat'
+        }
+      },
+      {
+        name: 'tools_reqstudio',
+        path: '/tools/reqstudio',
+        component: 'view.tools_reqstudio',
+        meta: {
+          title: 'req',
+          i18nKey: 'route.tools_reqstudio'
+        }
+      },
+      {
+        name: 'tools_sqlstudio',
+        path: '/tools/sqlstudio',
+        component: 'view.tools_sqlstudio',
+        meta: {
+          title: 'sql',
+          i18nKey: 'route.tools_sqlstudio'
+        }
+      }
+    ]
   }
 ];

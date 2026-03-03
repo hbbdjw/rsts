@@ -1,6 +1,7 @@
 use rusqlite::Result;
 
 // Database 接口抽象：提供统一的数据库操作能力
+#[allow(dead_code)]
 pub trait DatabaseService {
     fn validate_user(&self, username: &str, password: &str) -> Result<bool>;
     fn get_user_info(&self, username: &str) -> Result<Option<(i32, String, String)>>;

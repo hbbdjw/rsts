@@ -463,6 +463,7 @@ pub struct Response {
 
 // 登录：用户信息
 #[derive(Debug, Serialize)]
+#[allow(dead_code)]
 pub struct UserInfo {
     /// 用户ID
     pub id: i32,

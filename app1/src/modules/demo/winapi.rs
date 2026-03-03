@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 extern crate winapi;
 use std::io::Error;
 /// 打印Windows消息框

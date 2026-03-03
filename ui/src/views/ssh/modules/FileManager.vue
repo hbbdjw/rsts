@@ -540,7 +540,7 @@ async function handleUpload({ file }: UploadCustomRequestOptions) {
 }
 
 onMounted(() => {
-  if (props.hostname && props.username) {
+  if (props.autoConnect !== false && props.hostname && props.username) {
     connect();
   }
 });

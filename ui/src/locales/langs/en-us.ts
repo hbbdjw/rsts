@@ -231,6 +231,9 @@ const local: App.I18n.Schema = {
     'iframe-page': 'Iframe',
     home: 'Home',
     ssh: 'SSH',
+    tools: 'Tools',
+    tools_reqstudio: 'ReqStudio',
+    tools_sqlstudio: 'SQLStudio',
     testbox: 'Testbox'
   },
   page: {

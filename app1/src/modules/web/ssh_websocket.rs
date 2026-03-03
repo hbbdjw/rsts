@@ -78,6 +78,7 @@ impl WsSshSession {
 
 /// 消息类型枚举 - 从客户端接收的消息类型
 #[derive(Deserialize, Debug)]
+#[allow(dead_code)]
 pub enum ClientMessageType {
     #[serde(rename = "connect")]
     Connect,

@@ -18,6 +18,10 @@ import { Folder } from '@vicons/fa';
 import { AddOutline, DesktopOutline } from '@vicons/ionicons5';
 import { request } from '@/service/request';
 
+defineOptions({
+  name: 'SshGroup'
+});
+
 const emit = defineEmits<{
   (e: 'connect', payload: any): void;
 }>();

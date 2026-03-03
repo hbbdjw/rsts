@@ -162,6 +162,7 @@ impl TcpProxyServer {
     }
 
     // 检查连接是否应该被转发
+    #[allow(dead_code)]
     pub fn should_forward(&self, local_port: u16) -> Option<TcpProxyRule> {
         for rule in &self.config.rules {
             if rule.local_port == local_port {

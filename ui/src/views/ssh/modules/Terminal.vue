@@ -14,6 +14,10 @@ interface ConnectionDetails {
   password?: string;
 }
 
+defineOptions({
+  name: 'SshTerminal'
+});
+
 const props = withDefaults(
   defineProps<{
     hostname?: string;
@@ -21,16 +25,23 @@ const props = withDefaults(
     username?: string;
     password?: string;
     autoConnect?: boolean;
+    theme?: Record<string, string>;
+    fontSize?: number;
   }>(),
   {
+    hostname: '',
     port: 22,
-    autoConnect: false
+    username: '',
+    password: '',
+    autoConnect: false,
+    theme: () => ({}),
+    fontSize: 16
   }
 );
 
 const emit = defineEmits<{
   (e: 'statusChange', status: any): void;
-  (e: 'cwd-change', path: string): void;
+  (e: 'cwdChange', path: string): void;
 }>();
 
 // Use message hook
@@ -52,6 +63,7 @@ const terminalContainer = ref<HTMLDivElement | null>(null);
 const terminalInstance = ref<Terminal | null>(null);
 const fitAddon = ref<FitAddon | null>(null);
 const searchAddon = ref<SearchAddon | null>(null);
+const backgroundColor = ref(props.theme?.background || '#1e1e1e');
 
 // WebSocket ref
 const socket = ref<WebSocket | null>(null);
@@ -66,11 +78,13 @@ const handleResize = useDebounceFn(() => {
   ) {
     try {
       fitAddon.value.fit();
-    } catch (e) {
-      console.error('Failed to fit terminal:', e);
-    }
+      // Force focus after resize to ensure input works
+      if (terminalInstance.value) {
+        terminalInstance.value.focus();
+      }
+    } catch {}
   }
-}, 20);
+}, 50);
 
 useResizeObserver(terminalContainer, handleResize);
 
@@ -97,7 +111,7 @@ function tryEmitCwdChange() {
   const path = parseCdPathFromLine(currentLine);
   if (!path) return;
 
-  emit('cwd-change', path);
+  emit('cwdChange', path);
 }
 
 // Initialize terminal
@@ -107,7 +121,7 @@ const initTerminal = () => {
   const terminal = new Terminal({
     cursorBlink: true,
     cursorStyle: 'block',
-    fontSize: 16,
+    fontSize: props.fontSize,
     fontFamily: 'Consolas, "Courier New", monospace',
     theme: {
       background: '#1e1e1e',
@@ -129,7 +143,8 @@ const initTerminal = () => {
       brightBlue: '#5c5cff',
       brightMagenta: '#ff00ff',
       brightCyan: '#00ffff',
-      brightWhite: '#ffffff'
+      brightWhite: '#ffffff',
+      ...props.theme
     },
     allowTransparency: false,
     convertEol: true,
@@ -151,9 +166,7 @@ const initTerminal = () => {
     terminal.open(terminalContainer.value);
     try {
       fit.fit();
-    } catch (e) {
-      console.warn('Initial fit failed:', e);
-    }
+    } catch {}
   }
 
   terminal.onData(data => {
@@ -166,19 +179,96 @@ const initTerminal = () => {
     if (data === '\r') {
       try {
         tryEmitCwdChange();
-      } catch (e) {
-        console.error('Error parsing command:', e);
-      }
+      } catch {}
     }
   });
 
   terminal.onResize(size => {
-    if (socket.value && socket.value.readyState === WebSocket.OPEN && size.cols > 0 && size.rows > 0) {
+    // console.log('Terminal resized:', size);
+    if (size.cols <= 0 || size.rows <= 0 || Number.isNaN(size.cols) || Number.isNaN(size.rows)) return;
+
+    if (socket.value && socket.value.readyState === WebSocket.OPEN) {
       const msg = { type: 'resize', width: size.cols, height: size.rows };
       socket.value.send(JSON.stringify(msg));
     }
   });
 };
+
+function focus() {
+  nextTick(() => {
+    if (!terminalInstance.value || !fitAddon.value) return;
+
+    const container = terminalContainer.value;
+    if (!container) return;
+
+    if (container.clientWidth > 0 && container.clientHeight > 0) {
+      try {
+        fitAddon.value.fit();
+      } catch {}
+
+      const textarea = terminalInstance.value.element?.querySelector(
+        '.xterm-helper-textarea'
+      ) as HTMLTextAreaElement | null;
+
+      if (textarea) {
+        textarea.focus();
+      }
+
+      terminalInstance.value.focus();
+
+      const cols = terminalInstance.value.cols;
+      const rows = terminalInstance.value.rows;
+      if (cols > 0 && rows > 0 && socket.value && socket.value.readyState === WebSocket.OPEN) {
+        const msg = { type: 'resize', width: cols, height: rows };
+        socket.value.send(JSON.stringify(msg));
+      }
+    } else {
+      setTimeout(focus, 100);
+    }
+  });
+  // nextTick(() => {
+  //   if (terminalContainer.value) {
+  //     const currentParent = terminalInstance.value?.element?.parentElement;
+  //     if (currentParent && currentParent !== terminalContainer.value) {
+  //       terminalInstance.value?.dispose();
+  //       terminalInstance.value = null;
+  //       fitAddon.value = null;
+  //       searchAddon.value = null;
+  //       terminalContainer.value.innerHTML = '';
+  //       initTerminal();
+  //     }
+  //   }
+
+  //   if (!terminalInstance.value || !fitAddon.value || !terminalContainer.value) return;
+
+  //   if (terminalContainer.value.clientWidth <= 0 || terminalContainer.value.clientHeight <= 0) {
+  //     setTimeout(focus, 100);
+  //     return;
+  //   }
+
+  //   try {
+  //     fitAddon.value.fit();
+  //   } catch {}
+
+  //   const cols = terminalInstance.value.cols;
+  //   const rows = terminalInstance.value.rows;
+
+  //   if (cols > 0 && rows > 0) {
+  //     terminalInstance.value.focus();
+  //     const textarea = terminalInstance.value.element?.querySelector('textarea') as HTMLTextAreaElement | null;
+  //     textarea?.focus();
+  //     terminalInstance.value.refresh(0, rows - 1);
+
+  //     if (socket.value && socket.value.readyState === WebSocket.OPEN) {
+  //       const msg = { type: 'resize', width: cols, height: rows };
+  //       socket.value.send(JSON.stringify(msg));
+  //     }
+  //   } else {
+  //     setTimeout(focus, 100);
+  //   }
+  // });
+}
+
 const handleMessage = (msg: any) => {
   switch (msg.type) {
     case 'connected': {
@@ -186,8 +276,7 @@ const handleMessage = (msg: any) => {
       isConnecting.value = false;
       terminalInstance.value?.writeln(`\r\n\x1B[32mSSH Connected.\x1B[0m\r\n`);
       nextTick(() => {
-        terminalInstance.value?.focus();
-        fitAddon.value?.fit();
+        focus();
       });
       emit('statusChange', {
         connected: true,
@@ -296,10 +385,10 @@ const connect = (details?: ConnectionDetails) => {
     emit('statusChange', { connected: false });
   };
 
-  ws.onerror = err => {
+  ws.onerror = () => {
     isConnecting.value = false;
     terminalInstance.value?.writeln(`\r\n\x1B[31mConnection error.\x1B[0m`);
-    console.error(err);
+    message.error('Connection error');
     emit('statusChange', { connected: false });
   };
 };
@@ -333,6 +422,9 @@ const setOptions = (options: any) => {
     if (key === 'theme' && typeof value === 'object') {
       const currentTheme = terminalInstance.value!.options.theme || {};
       terminalInstance.value!.options.theme = { ...currentTheme, ...value };
+      if ((value as any).background) {
+        backgroundColor.value = (value as any).background;
+      }
     } else {
       (terminalInstance.value!.options as Record<string, unknown>)[key] = value;
     }
@@ -350,14 +442,22 @@ defineExpose({
   connect,
   disconnect,
   terminal: terminalInstance,
-  setOptions
+  setOptions,
+  focus
 });
 </script>
 
 <template>
-  <div class="relative h-full flex flex-col overflow-hidden bg-[#1e1e1e]">
-    <!-- Terminal Container -->
-    <div ref="terminalContainer" class="relative w-full flex-1 overflow-hidden"></div>
+  <div
+    class="relative h-full flex flex-col overflow-hidden"
+    :style="{ backgroundColor: backgroundColor }"
+  >
+    <div
+      ref="terminalContainer"
+      class="relative w-full flex-1 overflow-hidden"
+      @mousedown="focus"
+      @touchstart="focus"
+    ></div>
   </div>
 </template>
 

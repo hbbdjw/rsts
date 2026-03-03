@@ -3,14 +3,19 @@ use log::{debug, error, info};
 use russh::client::{self};
 use russh::*;
 use std::sync::Arc;
-use std::time::Duration;
 use tokio::sync::{Mutex, mpsc};
+
+#[derive(Debug)]
+enum RusshInputEvent {
+    Data(Vec<u8>),
+    Resize(u32, u32),
+}
 
 #[allow(dead_code)]
 pub struct RusshClient {
     session: Option<client::Handle<Client>>,
     channel: Option<Arc<Mutex<russh::Channel<russh::client::Msg>>>>,
-    input_tx: Option<mpsc::UnboundedSender<Vec<u8>>>,
+    input_tx: Option<mpsc::UnboundedSender<RusshInputEvent>>,
     host: String,
     port: u16,
     username: String,
@@ -33,7 +38,7 @@ impl RusshClient {
 
     pub async fn connect(&mut self) -> Result<()> {
         let config = client::Config {
-            inactivity_timeout: Some(Duration::from_secs(300)),
+            inactivity_timeout: None,
             ..Default::default()
         };
         let config = Arc::new(config);
@@ -68,11 +73,11 @@ impl RusshClient {
             let cols = width.unwrap_or(80);
             let rows = height.unwrap_or(24);
             channel
-                .request_pty(false, "xterm-256color", cols, rows, 0, 0, &[])
+                .request_pty(true, "xterm-256color", cols, rows, 0, 0, &[])
                 .await?;
 
             // 启动shell
-            channel.request_shell(false).await?;
+            channel.request_shell(true).await?;
 
             self.channel = Some(Arc::new(Mutex::new(channel)));
             info!("PTY会话创建成功");
@@ -92,7 +97,7 @@ impl RusshClient {
         // 优先通过输入队列发送，避免与读取器互相阻塞
         if let Some(ref tx) = self.input_tx {
             info!("RusshClient: 通过输入队列发送数据");
-            tx.send(data.to_vec())
+            tx.send(RusshInputEvent::Data(data.to_vec()))
                 .map_err(|_| anyhow::anyhow!("输入通道发送失败"))?;
             return Ok(());
         }
@@ -117,7 +122,7 @@ impl RusshClient {
     pub async fn start_pty_io(&mut self, tx: mpsc::UnboundedSender<Vec<u8>>) -> Result<()> {
         if let Some(ref channel_arc) = self.channel {
             let channel_arc = channel_arc.clone();
-            let (in_tx, mut in_rx) = mpsc::unbounded_channel::<Vec<u8>>();
+            let (in_tx, mut in_rx) = mpsc::unbounded_channel::<RusshInputEvent>();
             // 保存输入发送端
             self.input_tx = Some(in_tx.clone());
 
@@ -126,11 +131,22 @@ impl RusshClient {
                 let mut channel = channel_arc.lock().await;
                 loop {
                     tokio::select! {
-                        // 处理写入请求
-                        Some(data) = in_rx.recv() => {
-                            match channel.data(&data[..]).await {
-                                Ok(_) => debug!("向PTY写入数据: {:?}", String::from_utf8_lossy(&data)),
-                                Err(e) => error!("向PTY写入数据失败: {}", e),
+                        // 处理输入请求（写入数据或调整大小）
+                        Some(event) = in_rx.recv() => {
+                            match event {
+                                RusshInputEvent::Data(data) => {
+                                    // println!("stdin received: {:?}", data);
+                                    match channel.data(&data[..]).await {
+                                        Ok(_) => debug!("向PTY写入数据: {:?}", String::from_utf8_lossy(&data)),
+                                        Err(e) => error!("向PTY写入数据失败: {}", e),
+                                    }
+                                }
+                                RusshInputEvent::Resize(width, height) => {
+                                    info!("处理PTY窗口大小调整: {}x{}", width, height);
+                                    if let Err(e) = channel.window_change(width, height, 0, 0).await {
+                                        error!("调整PTY窗口大小失败: {}", e);
+                                    }
+                                }
                             }
                         },
                         // 处理读取数据
@@ -175,8 +191,15 @@ impl RusshClient {
     }
 
     pub async fn resize_pty(&self, width: u32, height: u32) -> Result<()> {
-        if let Some(ref channel) = self.channel {
+        if let Some(ref tx) = self.input_tx {
+            info!("RusshClient: 通过输入队列发送Resize请求: {}x{}", width, height);
+            tx.send(RusshInputEvent::Resize(width, height))
+                .map_err(|_| anyhow::anyhow!("输入通道发送失败"))?;
+            Ok(())
+        } else if let Some(ref channel) = self.channel {
+            // Fallback (will likely deadlock if loop is running, but kept for compatibility if IO loop not started)
             let channel = channel.lock().await;
+            println!("window change: {} x {}", width, height);
             channel.window_change(width, height, 0, 0).await?;
             debug!("PTY窗口大小调整为: {}x{}", width, height);
             Ok(())

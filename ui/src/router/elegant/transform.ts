@@ -170,7 +170,11 @@ const routeMap: RouteMap = {
   "iframe-page": "/iframe-page/:url",
   "login": "/login/:module(pwd-login|code-login|register|reset-pwd|bind-wechat)?",
   "ssh": "/ssh",
-  "testbox": "/testbox"
+  "testbox": "/testbox",
+  "tools": "/tools",
+  "tools_aichat": "/tools/aichat",
+  "tools_reqstudio": "/tools/reqstudio",
+  "tools_sqlstudio": "/tools/sqlstudio"
 };
 
 /**

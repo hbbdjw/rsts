@@ -23,11 +23,13 @@ use std::path::PathBuf;
 ///
 /// 最终梯度幅值 G = sqrt(Gx² + Gy²)
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct SobelOperator {
     pub input_path: PathBuf,
     pub output_path: PathBuf,
 }
 
+#[allow(dead_code)]
 impl SobelOperator {
     pub fn new(input_path: impl Into<PathBuf>, output_path: impl Into<PathBuf>) -> Self {
         Self {

@@ -51,7 +51,7 @@ pub async fn list_dir(
             }));
         }
     };
-    match guard.list(&path) {
+    match guard.list(&path).await {
         Ok(entries) => HttpResponse::Ok().json(serde_json::json!({
             "code": "0000",
             "msg": "success",
@@ -81,7 +81,7 @@ pub async fn read_file(
             }));
         }
     };
-    match guard.read_text(&path) {
+    match guard.read_text(&path).await {
         Ok(text) => HttpResponse::Ok().json(serde_json::json!({
             "code": "0000",
             "msg": "success",
@@ -110,7 +110,7 @@ pub async fn write_file(
             }));
         }
     };
-    match guard.write_text(&payload.path, &payload.content) {
+    match guard.write_text(&payload.path, &payload.content).await {
         Ok(()) => HttpResponse::Ok().json(serde_json::json!({
             "code": "0000",
             "msg": "success",
@@ -139,7 +139,7 @@ pub async fn delete_file(
             }));
         }
     };
-    match guard.delete(&payload.path) {
+    match guard.delete(&payload.path).await {
         Ok(()) => HttpResponse::Ok().json(serde_json::json!({
             "code": "0000",
             "msg": "success",
@@ -168,7 +168,7 @@ pub async fn rename_file(
             }));
         }
     };
-    match guard.rename(&payload.path, &payload.new_name) {
+    match guard.rename(&payload.path, &payload.new_name).await {
         Ok(()) => HttpResponse::Ok().json(serde_json::json!({
             "code": "0000",
             "msg": "success",
@@ -198,27 +198,18 @@ pub async fn upload_file(
         }
     };
 
-    let path = payload.path.clone();
-    let filename = payload.filename.clone();
-    let content_base64 = payload.content_base64.clone();
-
-    // Move blocking operation to thread pool
-    let result = web::block(move || guard.upload_base64(&path, &filename, &content_base64)).await;
-
-    match result {
-        Ok(Ok(())) => HttpResponse::Ok().json(serde_json::json!({
+    match guard
+        .upload_base64(&payload.path, &payload.filename, &payload.content_base64)
+        .await
+    {
+        Ok(()) => HttpResponse::Ok().json(serde_json::json!({
             "code": "0000",
             "msg": "success",
             "data": "OK"
         })),
-        Ok(Err(e)) => HttpResponse::Ok().json(serde_json::json!({
-            "code": "5000",
-            "msg": e.to_string(),
-            "data": null
-        })),
         Err(e) => HttpResponse::Ok().json(serde_json::json!({
             "code": "5000",
-            "msg": format!("Blocking error: {}", e),
+            "msg": e.to_string(),
             "data": null
         })),
     }
@@ -235,12 +226,8 @@ pub async fn download_file(
         Err(e) => return HttpResponse::BadRequest().body(e.to_string()),
     };
 
-    // Move blocking operation to thread pool
-    let path_clone = path.clone();
-    let result = web::block(move || guard.download(&path_clone)).await;
-
-    match result {
-        Ok(Ok(bytes)) => {
+    match guard.download(&path).await {
+        Ok(bytes) => {
             let fname = std::path::Path::new(&path)
                 .file_name()
                 .and_then(|s| s.to_str())
@@ -253,8 +240,7 @@ pub async fn download_file(
                 ))
                 .body(bytes)
         }
-        Ok(Err(e)) => HttpResponse::NotFound().body(e.to_string()),
-        Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
+        Err(e) => HttpResponse::NotFound().body(e.to_string()),
     }
 }
 
@@ -273,7 +259,7 @@ pub async fn create_dir(
             }));
         }
     };
-    match guard.mkdir(&payload.path) {
+    match guard.mkdir(&payload.path).await {
         Ok(()) => HttpResponse::Ok().json(serde_json::json!({
             "code": "0000",
             "msg": "success",
@@ -302,7 +288,7 @@ pub async fn set_permissions(
             }));
         }
     };
-    match guard.chmod(&payload.path, payload.mode) {
+    match guard.chmod(&payload.path, payload.mode).await {
         Ok(()) => HttpResponse::Ok().json(serde_json::json!({
             "code": "0000",
             "msg": "success",

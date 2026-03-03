@@ -22,6 +22,7 @@ pub struct Claims {
     pub exp: usize,
 }
 
+#[allow(dead_code)]
 pub fn create_token(
     user_id: &str,
     username: &str,

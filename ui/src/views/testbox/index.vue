@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue';
+import XModal from '@/components/xmodal/index.vue';
 import Test1 from './modules/Test1.vue';
 import JsonView from './modules/JsonView.vue';
 
@@ -75,12 +76,12 @@ const handleClick2 = () => {
         <template #description>JsonView</template>
       </NFloatButton>
     </NFlex>
-    <NModal v-model:show="showModal1" title="Sobel边缘检测" preset="card" draggable class="w-800px">
+    <XModal v-model:show="showModal1" title="Sobel边缘检测" width="800" height="600" :show-mask="false">
       <Test1 />
-    </NModal>
-    <NModal v-model:show="showModal2" title="JsonView" preset="card" draggable class="w-800px">
+    </XModal>
+    <XModal v-model:show="showModal2" title="JsonView" width="800" height="600" :show-mask="false">
       <JsonView />
-    </NModal>
+    </XModal>
   </div>
 </template>
 

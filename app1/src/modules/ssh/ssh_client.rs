@@ -11,6 +11,7 @@ pub type SshResult<T> = Result<T, SshError>;
 
 // 定义SSH错误类型
 #[derive(Error, Debug)]
+#[allow(dead_code)]
 pub enum SshError {
     #[error("连接错误: {0}")]
     ConnectionError(#[from] std::io::Error),
@@ -27,6 +28,7 @@ pub enum SshError {
 
 // SSH凭证结构体
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct SshCredentials {
     pub hostname: String,
     pub port: u16,

@@ -7,7 +7,7 @@ host = "0.0.0.0"
 database_path = "F:/yuanma/rust/rsts/app1/db/rsts.db"
 
 [static_files]
-root_dir = "F:/yuanma/rust/rsts/ui/soybean-admin/dist/"
+root_dir = "F:/yuanma/rust/rsts/ui/dist/"
 allowed_extensions = "html,css,js,png"
 
 [scheduled_task]

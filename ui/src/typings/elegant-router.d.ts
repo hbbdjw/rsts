@@ -25,6 +25,10 @@ declare module "@elegant-router/types" {
     "login": "/login/:module(pwd-login|code-login|register|reset-pwd|bind-wechat)?";
     "ssh": "/ssh";
     "testbox": "/testbox";
+    "tools": "/tools";
+    "tools_aichat": "/tools/aichat";
+    "tools_reqstudio": "/tools/reqstudio";
+    "tools_sqlstudio": "/tools/sqlstudio";
   };
 
   /**
@@ -64,6 +68,7 @@ declare module "@elegant-router/types" {
     | "login"
     | "ssh"
     | "testbox"
+    | "tools"
   >;
 
   /**
@@ -88,6 +93,9 @@ declare module "@elegant-router/types" {
     | "home"
     | "ssh"
     | "testbox"
+    | "tools_aichat"
+    | "tools_reqstudio"
+    | "tools_sqlstudio"
   >;
 
   /**

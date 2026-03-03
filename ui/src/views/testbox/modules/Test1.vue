@@ -2,6 +2,10 @@
 import { onUnmounted, ref } from 'vue';
 import { useMessage } from 'naive-ui';
 
+defineOptions({
+  name: 'TestboxTest1'
+});
+
 const message = useMessage();
 const videoRef = ref<HTMLVideoElement | null>(null);
 const canvasRef = ref<HTMLCanvasElement | null>(null);
@@ -134,7 +138,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="h-full w-full flex flex-col gap-4 p-4">
+  <div class="h-full w-full flex flex-col gap-4">
     <NSpace>
       <NButton type="primary" :disabled="isStreaming" @click="startCamera">启动摄像头 & 实时处理</NButton>
       <NButton type="error" :disabled="!isStreaming" @click="stopCamera">停止</NButton>

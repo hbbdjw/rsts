@@ -43,4 +43,8 @@ pub struct WsSshPtySession {
     pub hb: Instant,
     pub ssh_client: Option<AnyPtyClient>,
     pub connected: bool,
+    pub last_resize: Option<(u32, u32)>,
+    pub last_resize_at: Option<Instant>,
+    pub resize_deferred: bool,
+    pub pending_resize: Option<(u32, u32)>,
 }

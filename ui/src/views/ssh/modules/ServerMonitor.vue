@@ -8,7 +8,7 @@ const showSettings = ref(false);
 const timer = ref<NodeJS.Timeout | null>(null);
 
 const emit = defineEmits<{
-  (e: 'update-settings', settings: any): void;
+  (e: 'updateSettings', settings: any): void;
 }>();
 
 const props = defineProps<{
@@ -28,7 +28,7 @@ const settings = reactive({
 watch(
   settings,
   newVal => {
-    emit('update-settings', {
+    emit('updateSettings', {
       fontSize: newVal.fontSize,
       theme: {
         background: newVal.background,

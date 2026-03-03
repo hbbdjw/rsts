@@ -1,6 +1,7 @@
 use anyhow::Result;
 use log::{debug, error, info};
 use ssh2::Channel as Ssh2Channel;
+use ssh2::MethodType;
 use ssh2::Session as Ssh2Session;
 use std::io::{Read, Write};
 use std::net::TcpStream;
@@ -47,6 +48,30 @@ impl Ssh2PtyClient {
         tcp.set_write_timeout(Some(Duration::from_secs(30)))?;
         let mut sess = Ssh2Session::new()?;
         sess.set_tcp_stream(tcp);
+        
+        // 设置首选算法，以兼容更多类型的SSH服务器（如Debian等较新系统）
+        // 尝试设置KEX算法
+        let _ = sess.method_pref(
+            MethodType::Kex,
+            "curve25519-sha256,curve25519-sha256@libssh.org,ecdh-sha2-nistp256,ecdh-sha2-nistp384,ecdh-sha2-nistp521,diffie-hellman-group-exchange-sha256,diffie-hellman-group16-sha512,diffie-hellman-group18-sha512,diffie-hellman-group14-sha256"
+        );
+        
+        // 尝试设置HostKey算法
+        let _ = sess.method_pref(
+            MethodType::HostKey, 
+            "ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,ssh-ed25519,rsa-sha2-512,rsa-sha2-256,ssh-rsa"
+        );
+
+        // 尝试设置加密算法 (Ciphers)
+        let crypt = "aes128-ctr,aes192-ctr,aes256-ctr,aes128-gcm@openssh.com,aes256-gcm@openssh.com,chacha20-poly1305@openssh.com";
+        let _ = sess.method_pref(MethodType::CryptCs, crypt);
+        let _ = sess.method_pref(MethodType::CryptSc, crypt);
+        
+        // 尝试设置MAC算法
+        let mac = "hmac-sha2-256,hmac-sha2-512,hmac-sha2-256-etm@openssh.com,hmac-sha2-512-etm@openssh.com";
+        let _ = sess.method_pref(MethodType::MacCs, mac);
+        let _ = sess.method_pref(MethodType::MacSc, mac);
+
         sess.handshake()?;
         sess.set_blocking(true);
         sess.userauth_password(&self.username, &self.password)?;
@@ -105,7 +130,9 @@ impl Ssh2PtyClient {
                                 break;
                             }
                             Ok(PtyCommand::Resize { width, height }) => {
-                                let _ = channel.request_pty_size(width, height, None, None);
+                                if let Err(e) = channel.request_pty_size(width, height, None, None) {
+                                    error!("ssh2 resize error: {}", e);
+                                }
                             }
                             Ok(PtyCommand::Close) => {
                                 let _ = channel.close();

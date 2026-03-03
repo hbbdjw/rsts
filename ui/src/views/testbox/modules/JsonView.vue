@@ -233,8 +233,6 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
-  outputEditor.value?.dispose();
-  inputEditor.value?.dispose();
   clipboard?.destroy();
   clipboard = null;
 });
@@ -260,7 +258,7 @@ watch(unquoteKeys, () => {
 </script>
 
 <template>
-  <div class="h-full w-full flex flex-col gap-3 p-3">
+  <div class="h-full w-full flex flex-col gap-3">
     <div class="flex flex-wrap items-center gap-2">
       <NButton type="primary" @click="handleFormat">格式化</NButton>
       <NButton @click="handleMinify">压缩一行</NButton>
@@ -290,14 +288,8 @@ watch(unquoteKeys, () => {
 
       <textarea id="jsonViewCopyTarget" v-model="outputText" class="absolute opacity-0 -z-1" />
     </div>
-
-    <NAlert v-if="isValid !== null" :type="isValid ? 'success' : 'error'" :show-icon="false">
-      {{ validateMessage }}
-    </NAlert>
-
     <div class="grid grid-cols-2 min-h-520px flex-1 gap-3">
       <div class="flex flex-col overflow-hidden border rounded">
-        <div class="bg-#f7f7f7 px-3 py-2 text-12px text-gray-500 dark:bg-#1f1f1f">输入（JSON 字符串）</div>
         <div class="flex-1 overflow-hidden">
           <VueMonacoEditor
             v-model:value="inputText"
@@ -310,7 +302,6 @@ watch(unquoteKeys, () => {
       </div>
 
       <div class="flex flex-col overflow-hidden border rounded">
-        <div class="bg-#f7f7f7 px-3 py-2 text-12px text-gray-500 dark:bg-#1f1f1f">输出（JSON 视图）</div>
         <div class="flex-1 overflow-hidden">
           <VueMonacoEditor
             v-model:value="outputText"

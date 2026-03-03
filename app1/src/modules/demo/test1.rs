@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use log::info as log_info;
 use std::thread;
 

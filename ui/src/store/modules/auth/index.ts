@@ -2,7 +2,7 @@ import { computed, reactive, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import { defineStore } from 'pinia';
 import { useLoading } from '@sa/hooks';
-import { fetchGetUserInfo, fetchLogin } from '@/service/api';
+import { fetchGetUserInfo, fetchLogin, fetchRefreshToken } from '@/service/api';
 import { useRouterPush } from '@/hooks/common/router';
 import { localStg } from '@/utils/storage';
 import { SetupStoreId } from '@/enum';
@@ -20,6 +20,9 @@ export const useAuthStore = defineStore(SetupStoreId.Auth, () => {
   const { loading: loginLoading, startLoading, endLoading } = useLoading();
 
   const token = ref(getToken());
+  const refreshAdvanceSeconds = 60;
+  let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+  let refreshPromise: Promise<boolean> | null = null;
 
   const userInfo: Api.Auth.UserInfo = reactive({
     userId: '',
@@ -44,6 +47,7 @@ export const useAuthStore = defineStore(SetupStoreId.Auth, () => {
 
     clearAuthStorage();
 
+    clearRefreshTimer();
     authStore.$reset();
 
     if (!route.meta.constant) {
@@ -137,7 +141,7 @@ export const useAuthStore = defineStore(SetupStoreId.Auth, () => {
     const pass = await getUserInfo();
 
     if (pass) {
-      token.value = loginToken.token;
+      updateToken(loginToken.token);
 
       return true;
     }
@@ -158,6 +162,82 @@ export const useAuthStore = defineStore(SetupStoreId.Auth, () => {
     return false;
   }
 
+  function clearRefreshTimer() {
+    if (refreshTimer) {
+      clearTimeout(refreshTimer);
+      refreshTimer = null;
+    }
+  }
+
+  function getTokenExp(tokenValue: string) {
+    if (!tokenValue) {
+      return null;
+    }
+    const parts = tokenValue.split('.');
+    if (parts.length < 2) {
+      return null;
+    }
+    try {
+      const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+      const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), '=');
+      const payload = JSON.parse(atob(padded));
+      return typeof payload.exp === 'number' ? payload.exp : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function scheduleRefresh(tokenValue: string) {
+    clearRefreshTimer();
+    const exp = getTokenExp(tokenValue);
+    if (!exp) {
+      return;
+    }
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    const delaySeconds = exp - nowSeconds - refreshAdvanceSeconds;
+    if (delaySeconds <= 0) {
+      refreshTokenSilently().catch(() => null);
+      return;
+    }
+    refreshTimer = setTimeout(() => {
+      refreshTokenSilently().catch(() => null);
+    }, delaySeconds * 1000);
+  }
+
+  function updateToken(tokenValue: string) {
+    token.value = tokenValue;
+    if (tokenValue) {
+      scheduleRefresh(tokenValue);
+      return;
+    }
+    clearRefreshTimer();
+  }
+
+  async function refreshTokenSilently() {
+    if (refreshPromise) {
+      return refreshPromise;
+    }
+    const rToken = localStg.get('refreshToken') || '';
+    if (!rToken) {
+      await resetStore();
+      return false;
+    }
+    refreshPromise = (async () => {
+      const { data, error } = await fetchRefreshToken(rToken);
+      if (!error) {
+        localStg.set('token', data.token);
+        localStg.set('refreshToken', data.refreshToken);
+        updateToken(data.token);
+        return true;
+      }
+      await resetStore();
+      return false;
+    })();
+    const success = await refreshPromise;
+    refreshPromise = null;
+    return success;
+  }
+
   async function initUserInfo() {
     const hasToken = getToken();
 
@@ -166,6 +246,8 @@ export const useAuthStore = defineStore(SetupStoreId.Auth, () => {
 
       if (!pass) {
         resetStore();
+      } else {
+        updateToken(localStg.get('token') || '');
       }
     }
   }
@@ -178,6 +260,7 @@ export const useAuthStore = defineStore(SetupStoreId.Auth, () => {
     loginLoading,
     resetStore,
     login,
-    initUserInfo
+    initUserInfo,
+    updateToken
   };
 });

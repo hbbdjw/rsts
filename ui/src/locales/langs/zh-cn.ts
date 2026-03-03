@@ -227,6 +227,9 @@ const local: App.I18n.Schema = {
     'iframe-page': '外链页面',
     home: '首页',
     ssh: 'SSH',
+    tools: '工具',
+    tools_reqstudio: 'ReqStudio',
+    tools_sqlstudio: 'SQLStudio',
     testbox: '测试盒子'
   },
   page: {

@@ -1,6 +1,7 @@
 use super::actors::WsSshPtySession;
 use super::models::{AnyPtyClient, SendWsMessage, SetSshClient, SshCredentials};
 use crate::modules::ssh::ssh2_pty_client::Ssh2PtyClient;
+use crate::modules::ssh::russh_client::RusshClient;
 use actix::{Actor, ActorContext, AsyncContext, StreamHandler};
 use actix_web_actors::ws;
 use log::{error, info};
@@ -17,6 +18,10 @@ impl WsSshPtySession {
             hb: Instant::now(),
             ssh_client: None,
             connected: false,
+            last_resize: None,
+            last_resize_at: None,
+            resize_deferred: false,
+            pending_resize: None,
         }
     }
 
@@ -84,54 +89,126 @@ impl WsSshPtySession {
 
         let addr = ctx.address();
         let creds = credentials.clone();
+        let mut cols = pty_cols;
+        let mut rows = pty_rows;
+        if let Some((last_cols, last_rows)) = self.last_resize {
+            if cols.is_none() {
+                cols = Some(last_cols);
+            }
+            if rows.is_none() {
+                rows = Some(last_rows);
+            }
+        }
 
         // 在新的任务中处理SSH连接
         tokio::spawn(async move {
-            // 直接使用Ssh2PtyClient，因为RusshClient连接成功率较低
-            let mut client = Ssh2PtyClient::new(
+            // 优先尝试使用Ssh2PtyClient
+            let mut client_ssh2 = Ssh2PtyClient::new(
                 creds.hostname.clone(),
                 creds.port,
                 creds.username.clone(),
                 creds.password.clone(),
             );
-            if let Err(e) = client.connect().await {
-                let error_msg =
-                    serde_json::json!({"type": "error", "message": format!("SSH连接失败: {}", e)});
-                addr.do_send(SendWsMessage {
-                    text: error_msg.to_string(),
-                });
-                return;
+            
+            let mut ssh2_failed = false;
+            let mut ssh2_error = String::new();
+
+            // 尝试连接并创建PTY
+            if let Err(e) = client_ssh2.connect().await {
+                ssh2_failed = true;
+                ssh2_error = e.to_string();
+                info!("SSH2连接失败: {}, 将尝试使用Russh连接", e);
+            } else if let Err(e) = client_ssh2.create_pty_session(cols, rows).await {
+                ssh2_failed = true;
+                ssh2_error = e.to_string();
+                info!("SSH2创建PTY失败: {}, 将尝试使用Russh连接", e);
             }
-            if let Err(e) = client.create_pty_session(pty_cols, pty_rows).await {
-                let error_msg = serde_json::json!({"type": "error", "message": format!("创建PTY会话失败: {}", e)});
-                addr.do_send(SendWsMessage {
-                    text: error_msg.to_string(),
+
+            if !ssh2_failed {
+                // SSH2连接成功
+                let (tx, mut rx) = mpsc::unbounded_channel::<Vec<u8>>();
+                if let Err(e) = client_ssh2.start_pty_io(tx).await {
+                    let error_msg = serde_json::json!({"type": "error", "message": format!("启动PTY IO失败: {}", e)});
+                    addr.do_send(SendWsMessage {
+                        text: error_msg.to_string(),
+                    });
+                    return;
+                }
+                let client_arc = Arc::new(Mutex::new(client_ssh2));
+                addr.do_send(SetSshClient {
+                    client: AnyPtyClient::Ssh2(client_arc.clone()),
+                    connected: true,
                 });
-                return;
-            }
-            let (tx, mut rx) = mpsc::unbounded_channel::<Vec<u8>>();
-            if let Err(e) = client.start_pty_io(tx).await {
-                let error_msg = serde_json::json!({"type": "error", "message": format!("启动PTY IO失败: {}", e)});
+                
+                // 发送连接成功消息
+                let connected_msg = serde_json::json!({"type": "connected","host": creds.hostname,"port": creds.port,"username": creds.username});
                 addr.do_send(SendWsMessage {
-                    text: error_msg.to_string(),
+                    text: connected_msg.to_string(),
                 });
-                return;
-            }
-            let client_arc = Arc::new(Mutex::new(client));
-            addr.do_send(SetSshClient {
-                client: AnyPtyClient::Ssh2(client_arc.clone()),
-                connected: true,
-            });
-            let connected_msg = serde_json::json!({"type": "connected","host": creds.hostname,"port": creds.port,"username": creds.username});
-            addr.do_send(SendWsMessage {
-                text: connected_msg.to_string(),
-            });
-            while let Some(data) = rx.recv().await {
-                let s = String::from_utf8_lossy(&data);
-                let output_msg = serde_json::json!({"type": "output","data": s, "content": s});
+                
+                // 处理输出
+                while let Some(data) = rx.recv().await {
+                    let s = String::from_utf8_lossy(&data);
+                    let output_msg = serde_json::json!({"type": "output","data": s, "content": s});
+                    addr.do_send(SendWsMessage {
+                        text: output_msg.to_string(),
+                    });
+                }
+            } else {
+                // 尝试使用Russh连接
+                let mut client_russh = RusshClient::new(
+                    creds.hostname.clone(),
+                    creds.port,
+                    creds.username.clone(),
+                    creds.password.clone(),
+                );
+                
+                if let Err(e_russh) = client_russh.connect().await {
+                    let error_msg = serde_json::json!({
+                        "type": "error", 
+                        "message": format!("SSH连接失败 (SSH2: {}, Russh: {})", ssh2_error, e_russh)
+                    });
+                    addr.do_send(SendWsMessage {
+                        text: error_msg.to_string(),
+                    });
+                    return;
+                }
+                
+                if let Err(e) = client_russh.create_pty_session(cols, rows).await {
+                    let error_msg = serde_json::json!({"type": "error", "message": format!("Russh创建PTY失败: {}", e)});
+                    addr.do_send(SendWsMessage {
+                        text: error_msg.to_string(),
+                    });
+                    return;
+                }
+                
+                let (tx, mut rx) = mpsc::unbounded_channel::<Vec<u8>>();
+                if let Err(e) = client_russh.start_pty_io(tx).await {
+                    let error_msg = serde_json::json!({"type": "error", "message": format!("Russh启动PTY IO失败: {}", e)});
+                    addr.do_send(SendWsMessage {
+                        text: error_msg.to_string(),
+                    });
+                    return;
+                }
+                
+                let client_arc = Arc::new(Mutex::new(client_russh));
+                addr.do_send(SetSshClient {
+                    client: AnyPtyClient::Russh(client_arc.clone()),
+                    connected: true,
+                });
+                
+                let connected_msg = serde_json::json!({"type": "connected","host": creds.hostname,"port": creds.port,"username": creds.username});
                 addr.do_send(SendWsMessage {
-                    text: output_msg.to_string(),
+                    text: connected_msg.to_string(),
                 });
+                
+                while let Some(data) = rx.recv().await {
+                    let s = String::from_utf8_lossy(&data);
+                    let output_msg = serde_json::json!({"type": "output","data": s, "content": s});
+                    addr.do_send(SendWsMessage {
+                        text: output_msg.to_string(),
+                    });
+                }
             }
         });
     }
@@ -173,9 +250,11 @@ impl WsSshPtySession {
     }
 
     /// 处理窗口大小调整
-    fn handle_resize(&self, width: u32, height: u32, ctx: &mut ws::WebsocketContext<Self>) {
+    fn apply_resize(&mut self, width: u32, height: u32, ctx: &mut ws::WebsocketContext<Self>) {
+        self.last_resize = Some((width, height));
+        self.last_resize_at = Some(Instant::now());
+
         if !self.connected {
-            self.send_error("SSH连接未建立", ctx);
             return;
         }
 
@@ -186,7 +265,46 @@ impl WsSshPtySession {
                     error!("调整PTY窗口大小失败: {}", e);
                 }
             });
+        } else {
+            self.send_error("SSH客户端未初始化", ctx);
         }
+    }
+
+    fn handle_resize(&mut self, width: u32, height: u32, ctx: &mut ws::WebsocketContext<Self>) {
+        let width = width.max(1);
+        let height = height.max(1);
+
+        if self.last_resize == Some((width, height)) {
+            return;
+        }
+
+        if !self.connected {
+            self.last_resize = Some((width, height));
+            return;
+        }
+
+        let now = Instant::now();
+        let min_interval = Duration::from_millis(50);
+
+        if let Some(last_at) = self.last_resize_at {
+            let elapsed = now.duration_since(last_at);
+            if elapsed < min_interval {
+                self.pending_resize = Some((width, height));
+                if !self.resize_deferred {
+                    self.resize_deferred = true;
+                    let delay = min_interval - elapsed;
+                    ctx.run_later(delay, |act, ctx| {
+                        act.resize_deferred = false;
+                        if let Some((pending_w, pending_h)) = act.pending_resize.take() {
+                            act.apply_resize(pending_w, pending_h, ctx);
+                        }
+                    });
+                }
+                return;
+            }
+        }
+
+        self.apply_resize(width, height, ctx);
     }
 }
 

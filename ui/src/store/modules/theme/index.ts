@@ -35,14 +35,9 @@ export const useThemeStore = defineStore(SetupStoreId.Theme, () => {
         const config = JSON.parse(data.themeConfig) as Partial<App.Theme.ThemeSetting>;
         const newSettings = defu(config, initThemeSettings()) as App.Theme.ThemeSetting;
 
-        // Update settings properties without replacing the object to preserve refs
-        (Object.keys(newSettings) as Array<keyof App.Theme.ThemeSetting>).forEach(key => {
-          settings.value[key] = newSettings[key];
-        });
+        Object.assign(settings.value, newSettings);
       }
-    } catch (e) {
-      console.error('Failed to load theme config:', e);
-    }
+    } catch {}
   }
 
   /** Watch auth status to load config */

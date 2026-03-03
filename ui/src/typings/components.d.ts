@@ -98,6 +98,7 @@ declare module 'vue' {
     TextEditor: typeof import('./../components/text-editor/index.vue')['default']
     ThemeSchemaSwitch: typeof import('./../components/common/theme-schema-switch.vue')['default']
     WaveBg: typeof import('./../components/custom/wave-bg.vue')['default']
+    Xmodal: typeof import('./../components/xmodal/index.vue')['default']
   }
 }
 
@@ -189,4 +190,5 @@ declare global {
   const TextEditor: typeof import('./../components/text-editor/index.vue')['default']
   const ThemeSchemaSwitch: typeof import('./../components/common/theme-schema-switch.vue')['default']
   const WaveBg: typeof import('./../components/custom/wave-bg.vue')['default']
+  const Xmodal: typeof import('./../components/xmodal/index.vue')['default']
 }
