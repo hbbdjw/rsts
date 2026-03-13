@@ -3,7 +3,8 @@
 import { computed, h, onMounted, reactive, ref } from 'vue';
 import {
   NButton,
-  NForm,
+  NDropdown,
+  Form,
   NFormItem,
   NIcon,
   NInput,
@@ -47,6 +48,31 @@ interface ServerItem {
 const groups = ref<GroupItem[]>([]);
 const servers = ref<ServerItem[]>([]);
 const selectedKeys = ref<string[]>([]);
+const editingServerId = ref<number | null>(null);
+const connectModalTitle = computed(() => (editingServerId.value ? '编辑连接服务器' : '新增连接服务器'));
+
+const showContextMenu = ref(false);
+const contextMenuX = ref(0);
+const contextMenuY = ref(0);
+const contextServer = ref<ServerItem | null>(null);
+const contextGroup = ref<GroupItem | null>(null);
+
+const serverContextMenuOptions = [
+  { label: '连接', key: 'connect' },
+  { label: '修改', key: 'edit' },
+  { label: '删除', key: 'delete_server' }
+];
+
+const groupContextMenuOptions = [
+  { label: '新增服务器', key: 'add_server' },
+  { label: '新增分组', key: 'add_group' },
+  { label: '重命名', key: 'rename_group' },
+  { label: '删除', key: 'delete_group' }
+];
+
+const contextMenuOptions = computed(() => {
+  return contextServer.value ? serverContextMenuOptions : groupContextMenuOptions;
+});
 
 const groupKey = (id: number) => `group-${id}`;
 const serverKey = (id: number) => `server-${id}`;
@@ -81,6 +107,8 @@ const showConnectModal = ref(false);
 const showAddGroupModal = ref(false);
 const showRenameGroupModal = ref(false);
 const showDeleteGroupModal = ref(false);
+
+const showDeleteServerModal = ref(false);
 
 const connectForm = reactive({
   hostname: '',
@@ -145,17 +173,6 @@ const handleUpdateSelectedKeys = (keys: string[], options: any[]) => {
   }
 };
 
-const handleAddConnection = () => {
-  connectForm.hostname = '';
-  connectForm.port = 22;
-  connectForm.username = '';
-  connectForm.password = '';
-  connectForm.alias = '';
-  connectForm.remark = '';
-  connectForm.group_id = getSelectedGroup()?.id ?? defaultGroupId.value;
-  showConnectModal.value = true;
-};
-
 const handleConnect = () => {
   if (!connectForm.hostname || !connectForm.username) {
     message.error('请输入主机名和用户名');
@@ -184,18 +201,110 @@ const handleSaveServer = async () => {
     remark: connectForm.remark || '',
     group_id: connectForm.group_id ?? defaultGroupId.value
   };
-  const { error } = await request<ServerItem>({
-    url: '/api/ssh/servers',
-    method: 'post',
-    data: payload
-  });
+  const { error } = editingServerId.value
+    ? await request<ServerItem>({
+        url: `/api/ssh/servers/${editingServerId.value}`,
+        method: 'put',
+        data: payload
+      })
+    : await request<ServerItem>({
+        url: '/api/ssh/servers',
+        method: 'post',
+        data: payload
+      });
   if (error) {
     message.error(error.message || '保存失败');
     return;
   }
   message.success('保存成功');
   showConnectModal.value = false;
+  editingServerId.value = null;
   await loadData();
+};
+
+const handleDeleteServer = async () => {
+  if (!contextServer.value) return;
+  const { error } = await request<{ id: number }>({
+    url: `/api/ssh/servers/${contextServer.value.id}`,
+    method: 'delete'
+  });
+  if (error) {
+    message.error(error.message || '删除失败');
+    return;
+  }
+  showDeleteServerModal.value = false;
+  contextServer.value = null;
+  await loadData();
+};
+
+const openContextMenu = (e: MouseEvent, node: any) => {
+  e.preventDefault();
+  contextMenuX.value = e.clientX;
+  contextMenuY.value = e.clientY;
+  
+  if (node.type === 'server' && node.server) {
+    contextServer.value = node.server;
+    contextGroup.value = null;
+  } else if (node.type === 'group') {
+    const groupId = Number(node.key.replace('group-', ''));
+    contextGroup.value = groups.value.find(g => g.id === groupId) || null;
+    contextServer.value = null;
+  } else {
+    return;
+  }
+  showContextMenu.value = true;
+};
+
+const handleContextSelect = (key: string) => {
+  showContextMenu.value = false;
+  
+  if (contextServer.value) {
+    const s = contextServer.value;
+    if (key === 'connect') {
+      emit('connect', {
+        hostname: s.hostname,
+        port: s.port,
+        username: s.username,
+        password: s.password || ''
+      });
+    } else if (key === 'edit') {
+      editingServerId.value = s.id;
+      connectForm.hostname = s.hostname;
+      connectForm.port = s.port;
+      connectForm.username = s.username;
+      connectForm.password = s.password || '';
+      connectForm.alias = s.alias || '';
+      connectForm.remark = s.remark || '';
+      connectForm.group_id = s.group_id ?? defaultGroupId.value;
+      showConnectModal.value = true;
+    } else if (key === 'delete_server') {
+      showDeleteServerModal.value = true;
+    }
+  } else if (contextGroup.value) {
+    const g = contextGroup.value;
+    if (key === 'add_server') {
+      handleAddConnection(g.id);
+    } else if (key === 'add_group') {
+      handleOpenAddGroup();
+    } else if (key === 'rename_group') {
+      renameGroupForm.name = g.name;
+      showRenameGroupModal.value = true;
+    } else if (key === 'delete_group') {
+      showDeleteGroupModal.value = true;
+    }
+  }
+};
+
+const handleAddConnection = (groupId?: number) => {
+  editingServerId.value = null;
+  connectForm.hostname = '';
+  connectForm.port = 22;
+  connectForm.username = '';
+  connectForm.password = '';
+  connectForm.alias = '';
+  connectForm.remark = '';
+  connectForm.group_id = typeof groupId === 'number' ? groupId : getSelectedGroup()?.id ?? defaultGroupId.value;
+  showConnectModal.value = true;
 };
 
 const handleOpenAddGroup = () => {
@@ -290,11 +399,8 @@ const handleDeleteGroup = async () => {
           <template #icon>
             <NIcon><AddOutline /></NIcon>
           </template>
-          新增
+          新增连接
         </NButton>
-        <NButton size="tiny" ghost @click="handleOpenAddGroup">新增分组</NButton>
-        <NButton size="tiny" ghost @click="handleOpenRenameGroup">重命名</NButton>
-        <NButton size="tiny" ghost @click="handleOpenDeleteGroup">删除</NButton>
       </NSpace>
     </div>
     <div class="flex-1 overflow-auto p-2">
@@ -303,8 +409,20 @@ const handleDeleteGroup = async () => {
         :data="treeData"
         :selected-keys="selectedKeys"
         @update:selected-keys="handleUpdateSelectedKeys"
+        :node-props="({ option }: any) => ({ onContextmenu: (e: MouseEvent) => openContextMenu(e, option) })"
       />
     </div>
+
+    <NDropdown
+      :show="showContextMenu"
+      :x="contextMenuX"
+      :y="contextMenuY"
+      :options="contextMenuOptions"
+      placement="bottom-start"
+      trigger="manual"
+      @select="handleContextSelect"
+      @clickoutside="() => (showContextMenu = false)"
+    />
 
     <NModal v-model:show="showAddGroupModal" title="新增分组" preset="card" class="w-96">
       <NForm :model="groupForm" label-placement="left" label-width="80">
@@ -328,6 +446,13 @@ const handleDeleteGroup = async () => {
       </NForm>
     </NModal>
 
+    <NModal v-model:show="showDeleteServerModal" title="删除连接" preset="card" class="w-96">
+      <div class="text-sm text-gray-500">确认删除该服务器连接？</div>
+      <div class="mt-4 flex justify-end">
+        <NButton type="primary" @click="handleDeleteServer">确认</NButton>
+      </div>
+    </NModal>
+
     <NModal v-model:show="showDeleteGroupModal" title="删除分组" preset="card" class="w-96">
       <div class="text-sm text-gray-500">确认删除该分组？该分组下的服务器将移动到默认分组。</div>
       <div class="mt-4 flex justify-end">
@@ -335,7 +460,7 @@ const handleDeleteGroup = async () => {
       </div>
     </NModal>
 
-    <NModal v-model:show="showConnectModal" title="新增连接服务器" preset="card" class="w-96">
+    <NModal v-model:show="showConnectModal" :title="connectModalTitle" preset="card" class="w-96">
       <NForm :model="connectForm" label-placement="left" label-width="80">
         <NFormItem label="分组">
           <NSelect v-model:value="connectForm.group_id" :options="groupOptions" clearable />

@@ -10,6 +10,7 @@ use std::{
 use actix::*;
 use actix_files;
 use actix_web::{App, Error, HttpRequest, HttpResponse, HttpServer, Responder, dev::Server, web};
+use actix_cors::Cors;
 
 use crate::modules::config::config::get_config;
 use crate::modules::proxy::proxy_http::ProxyMiddleware;
@@ -17,7 +18,7 @@ use crate::modules::web::chat_api::upload_media as chat_upload_media;
 use crate::modules::web::database::Database;
 use crate::modules::web::login_handler::{
     get_user_info, get_user_theme_config_handler, health_check, login, refresh_token,
-    update_user_theme_config_handler,
+    update_user_theme_config_handler, get_user_terminal_config_handler, update_user_terminal_config_handler,
 };
 use crate::modules::web::sftp_api::{
     create_dir as sftp_mkdir, create_session as sftp_create_session, delete_file as sftp_delete,
@@ -34,12 +35,18 @@ use crate::modules::web::ssh_servers_api::{
     create_group, create_server, delete_group, delete_server, list_groups, list_servers,
     update_group, update_server,
 };
+use crate::modules::web::ssh_monitor_api;
 use actix_web_actors::ws;
 // 导入日志宏
 // use crate::log_debug;
 // use crate::log_error;
 use crate::log_info;
+use crate::modules::aigateway::tianyi_api::tianyi_ws_route; // 导入天翼云AI WebSocket路由函数
 use crate::modules::sftp::service::SftpService; // 导入SftpService
+use crate::modules::sqlstudio::{
+    create_connection_handler, get_metadata_handler, list_connections_handler,
+    test_connection_handler, update_connection_handler, delete_connection_handler,
+};
 use crate::modules::ssh::SshService; // 从ssh模块导入SshService
 use crate::modules::task::api::{start_task, stop_task, task_status};
 use crate::modules::task::service::TaskManager;
@@ -122,6 +129,17 @@ pub async fn setup_actix() -> Result<Server, std::io::Error> {
         App::new()
             // 提高Json负载大小限制以支持媒体上传（默认较小）
             .app_data(actix_web::web::JsonConfig::default().limit(50 * 1024 * 1024))
+            // 全局 CORS（允许前端开发端口访问）
+            .wrap(
+                Cors::default()
+                    .allow_any_origin()
+                    .allowed_methods(vec!["GET", "POST", "OPTIONS"])
+                    .allowed_headers(vec![
+                        actix_web::http::header::CONTENT_TYPE,
+                        actix_web::http::header::AUTHORIZATION,
+                    ])
+                    .max_age(3600),
+            )
             // 注册应用数据（用于在处理函数中访问）
             .app_data(web::Data::new(db_clone.clone()))
             .app_data(web::Data::new(config_clone.clone()))
@@ -140,6 +158,7 @@ pub async fn setup_actix() -> Result<Server, std::io::Error> {
             .route("/ws/ssh", web::get().to(ssh_route))
             .route("/ws/ssh-pty", web::get().to(ssh_pty_route))
             .route("/ws/sobel", web::get().to(sobel_ws_route))
+            .route("/ws/tianyi", web::get().to(tianyi_ws_route))
             .route("/api/health", web::get().to(health_check))
             .route("/api/login", web::post().to(login))
             .service(
@@ -158,6 +177,14 @@ pub async fn setup_actix() -> Result<Server, std::io::Error> {
                     .route(
                         "/theme-config",
                         web::post().to(update_user_theme_config_handler),
+                    )
+                    .route(
+                        "/terminal-config",
+                        web::get().to(get_user_terminal_config_handler),
+                    )
+                    .route(
+                        "/terminal-config",
+                        web::post().to(update_user_terminal_config_handler),
                     ),
             )
             // SQLite API routes
@@ -179,6 +206,31 @@ pub async fn setup_actix() -> Result<Server, std::io::Error> {
                 web::post().to(batch_delete_rows),
             )
             .route("/api/sqlite/query", web::post().to(sql_query))
+            // SQL Studio Connections API
+            .route(
+                "/api/sqlstudio/connection/test",
+                web::post().to(test_connection_handler),
+            )
+            .route(
+                "/api/sqlstudio/connection/create",
+                web::post().to(create_connection_handler),
+            )
+            .route(
+                "/api/sqlstudio/connection/list",
+                web::get().to(list_connections_handler),
+            )
+            .route(
+                "/api/sqlstudio/connection/update",
+                web::post().to(update_connection_handler),
+            )
+            .route(
+                "/api/sqlstudio/connection/delete",
+                web::post().to(delete_connection_handler),
+            )
+            .route(
+                "/api/sqlstudio/connection/metadata",
+                web::post().to(get_metadata_handler),
+            )
             // Chat 媒体上传 API 路由
             .route("/api/chat/upload", web::post().to(chat_upload_media))
             // SFTP 文件操作 API 路由（远程SFTP会话）
@@ -196,7 +248,7 @@ pub async fn setup_actix() -> Result<Server, std::io::Error> {
             .route("/api/sftp/download", web::get().to(sftp_download))
             .route("/api/sftp/mkdir", web::post().to(sftp_mkdir))
             .route("/api/sftp/chmod", web::post().to(sftp_chmod))
-            // SSH服务器配置 CRUD API 路由
+            // SSH 服务器配置 CRUD API 路由
             .route("/api/ssh/groups", web::get().to(list_groups))
             .route("/api/ssh/groups", web::post().to(create_group))
             .route("/api/ssh/groups/{id}", web::put().to(update_group))
@@ -205,6 +257,10 @@ pub async fn setup_actix() -> Result<Server, std::io::Error> {
             .route("/api/ssh/servers", web::post().to(create_server))
             .route("/api/ssh/servers/{id}", web::put().to(update_server))
             .route("/api/ssh/servers/{id}", web::delete().to(delete_server))
+            // SSH 实时监控 API
+            .route("/api/ssh/monitor", web::post().to(ssh_monitor_api::get_monitor_stats))
+            // 兼容预检请求
+            .route("/api/ssh/monitor", web::route().guard(actix_web::guard::Options()).to(|| async { HttpResponse::NoContent().finish() }))
             // 使用模板引擎渲染 index.html
             .route("/", web::get().to(serve_index))
             .route("/index.html", web::get().to(serve_index))

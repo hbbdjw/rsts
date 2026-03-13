@@ -32,7 +32,10 @@ struct FrontendUserInfo {
 
 fn build_user_info(id: i32, username: &str) -> FrontendUserInfo {
     let mut roles = vec!["R_USER".to_string()];
-    if username.eq_ignore_ascii_case("admin") || username.eq_ignore_ascii_case("super") {
+    if username.eq_ignore_ascii_case("admin") {
+        roles.push("R_SUPER".to_string());
+        roles.push("R_ADMIN".to_string());
+    } else if username.eq_ignore_ascii_case("super") {
         roles.push("R_SUPER".to_string());
     }
 
@@ -244,6 +247,78 @@ pub async fn update_user_theme_config_handler(
                 let response = Response {
                     code: CODE_SUCCESS.to_string(),
                     msg: "更新主题配置成功".to_string(),
+                    data: None,
+                };
+                HttpResponse::Ok().json(response)
+            }
+            Err(e) => {
+                let response = Response {
+                    code: "500".to_string(),
+                    msg: format!("数据库错误: {}", e),
+                    data: None,
+                };
+                HttpResponse::Ok().json(response)
+            }
+        }
+    } else {
+        HttpResponse::Unauthorized().finish()
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct TerminalConfigRequest {
+    pub config: String,
+}
+
+// 获取用户终端配置
+pub async fn get_user_terminal_config_handler(
+    req: HttpRequest,
+    db: web::Data<Arc<Database>>,
+) -> impl Responder {
+    if let Some(claims) = req.extensions().get::<Claims>() {
+        match db.get_user_terminal_config(&claims.username) {
+            Ok(Some(config)) => {
+                let response = Response {
+                    code: CODE_SUCCESS.to_string(),
+                    msg: "获取终端配置成功".to_string(),
+                    data: Some(serde_json::json!({ "config": config })),
+                };
+                HttpResponse::Ok().json(response)
+            }
+            Ok(None) => {
+                let response = Response {
+                    code: CODE_SUCCESS.to_string(),
+                    msg: "未找到终端配置".to_string(),
+                    data: None,
+                };
+                HttpResponse::Ok().json(response)
+            }
+            Err(e) => {
+                let response = Response {
+                    code: "500".to_string(),
+                    msg: format!("数据库错误: {}", e),
+                    data: None,
+                };
+                HttpResponse::Ok().json(response)
+            }
+        }
+    } else {
+        HttpResponse::Unauthorized().finish()
+    }
+}
+
+// 更新用户终端配置
+pub async fn update_user_terminal_config_handler(
+    req: HttpRequest,
+    body: web::Json<TerminalConfigRequest>,
+    db: web::Data<Arc<Database>>,
+) -> impl Responder {
+    if let Some(claims) = req.extensions().get::<Claims>() {
+        match db.update_user_terminal_config(&claims.username, &body.config) {
+            Ok(_) => {
+                let response = Response {
+                    code: CODE_SUCCESS.to_string(),
+                    msg: "更新终端配置成功".to_string(),
                     data: None,
                 };
                 HttpResponse::Ok().json(response)

@@ -1,5 +1,5 @@
 import { getServiceBaseURL } from '@/utils/service';
-import { request } from '../request';
+import { request } from '@/service/request';
 
 export interface SftpSession {
   session_id: number;

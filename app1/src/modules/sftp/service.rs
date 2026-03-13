@@ -1,16 +1,16 @@
+use base64::prelude::*;
 use russh::client::{self, Config};
 use russh_sftp::client::SftpSession as SftpClient;
 use ssh2::MethodType;
 use ssh2::Session as Ssh2Session;
 use ssh2::Sftp as Ssh2Sftp;
+use std::future::Future;
 use std::net::TcpStream;
 use std::sync::Arc;
-use std::time::Duration;
-use tokio::sync::Mutex as TokioMutex;
 use std::sync::Mutex as StdMutex;
+use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use base64::prelude::*;
-use std::future::Future;
+use tokio::sync::Mutex as TokioMutex;
 
 #[derive(Clone, Debug)]
 pub struct SftpCredentials {
@@ -109,7 +109,7 @@ impl SftpService {
             "curve25519-sha256,curve25519-sha256@libssh.org,ecdh-sha2-nistp256,ecdh-sha2-nistp384,ecdh-sha2-nistp521,diffie-hellman-group-exchange-sha256,diffie-hellman-group16-sha512,diffie-hellman-group18-sha512,diffie-hellman-group14-sha256"
         );
         let _ = sess.method_pref(
-            MethodType::HostKey, 
+            MethodType::HostKey,
             "ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,ssh-ed25519,rsa-sha2-512,rsa-sha2-256,ssh-rsa"
         );
         let crypt = "aes128-ctr,aes192-ctr,aes256-ctr,aes128-gcm@openssh.com,aes256-gcm@openssh.com,chacha20-poly1305@openssh.com";
@@ -128,7 +128,9 @@ impl SftpService {
         }
 
         if !authed {
-            struct KI { pwd: String }
+            struct KI {
+                pwd: String,
+            }
             impl ssh2::KeyboardInteractivePrompt for KI {
                 fn prompt<'a>(
                     &mut self,
@@ -139,8 +141,13 @@ impl SftpService {
                     prompts.iter().map(|_| self.pwd.clone()).collect()
                 }
             }
-            let mut ki = KI { pwd: creds.password.clone() };
-            if sess.userauth_keyboard_interactive(&creds.username, &mut ki).is_ok() {
+            let mut ki = KI {
+                pwd: creds.password.clone(),
+            };
+            if sess
+                .userauth_keyboard_interactive(&creds.username, &mut ki)
+                .is_ok()
+            {
                 authed = sess.authenticated();
             }
         }
@@ -160,10 +167,13 @@ impl SftpService {
         };
         let config = Arc::new(config);
         let sh = ClientHandler;
-        
-        let mut session = client::connect(config, (creds.hostname.as_str(), creds.port), sh).await?;
-        
-        let auth_res = session.authenticate_password(creds.username.clone(), creds.password.clone()).await?;
+
+        let mut session =
+            client::connect(config, (creds.hostname.as_str(), creds.port), sh).await?;
+
+        let auth_res = session
+            .authenticate_password(creds.username.clone(), creds.password.clone())
+            .await?;
         if !matches!(auth_res, client::AuthResult::Success) {
             return Err(anyhow::anyhow!("Russh Authentication failed"));
         }
@@ -172,16 +182,16 @@ impl SftpService {
         channel.request_subsystem(true, "sftp").await?;
         let sftp = SftpClient::new(channel.into_stream()).await?;
 
-        Ok(RusshSessionImpl { 
-            session: Arc::new(session), 
-            sftp: Arc::new(sftp) 
+        Ok(RusshSessionImpl {
+            session: Arc::new(session),
+            sftp: Arc::new(sftp),
         })
     }
 
     pub async fn get_session(&self, session_id: usize) -> anyhow::Result<SftpSessionGuard> {
         let sessions = self.sessions.lock().await;
         if let Some(Some(_)) = sessions.get(session_id) {
-             // Valid
+            // Valid
         } else {
             return Err(anyhow::anyhow!("无效的SFTP会话ID"));
         }
@@ -214,12 +224,10 @@ impl SftpSessionGuard {
         let sessions = self.service.lock().await;
         match sessions.get(self.id) {
             Some(Some(AnySftpSession::Ssh2(s))) => Ok(AnySftpSession::Ssh2(s.clone())),
-            Some(Some(AnySftpSession::Russh(s))) => {
-                Ok(AnySftpSession::Russh(RusshSessionImpl {
-                    session: s.session.clone(),
-                    sftp: s.sftp.clone(),
-                }))
-            },
+            Some(Some(AnySftpSession::Russh(s))) => Ok(AnySftpSession::Russh(RusshSessionImpl {
+                session: s.session.clone(),
+                sftp: s.sftp.clone(),
+            })),
             _ => Err(anyhow::anyhow!("会话不存在")),
         }
     }
@@ -229,7 +237,9 @@ impl SftpSessionGuard {
             AnySftpSession::Ssh2(wrapper) => {
                 let path = path.to_string();
                 tokio::task::spawn_blocking(move || {
-                    let guard = wrapper.lock().map_err(|_| anyhow::anyhow!("Lock poisoned"))?;
+                    let guard = wrapper
+                        .lock()
+                        .map_err(|_| anyhow::anyhow!("Lock poisoned"))?;
                     let mut out = Vec::new();
                     let entries = guard.sftp.readdir(std::path::Path::new(&path))?;
                     for (name_path, stat) in entries {
@@ -257,15 +267,18 @@ impl SftpSessionGuard {
                         });
                     }
                     Ok(out)
-                }).await?
+                })
+                .await?
             }
             AnySftpSession::Russh(s) => {
                 let entries = s.sftp.read_dir(path).await?;
                 let mut out = Vec::new();
                 for entry in entries {
                     let name = entry.file_name();
-                    if name == "." || name == ".." { continue; }
-                    
+                    if name == "." || name == ".." {
+                        continue;
+                    }
+
                     let attrs = entry.metadata();
                     let size = attrs.size.unwrap_or(0);
                     let permissions = attrs.permissions.unwrap_or(0);
@@ -297,14 +310,17 @@ impl SftpSessionGuard {
             AnySftpSession::Ssh2(wrapper) => {
                 let path = path.to_string();
                 tokio::task::spawn_blocking(move || {
-                    let guard = wrapper.lock().map_err(|_| anyhow::anyhow!("Lock poisoned"))?;
+                    let guard = wrapper
+                        .lock()
+                        .map_err(|_| anyhow::anyhow!("Lock poisoned"))?;
                     let mut file = guard.sftp.open(std::path::Path::new(&path))?;
                     let mut buf = Vec::new();
                     use std::io::Read;
                     file.read_to_end(&mut buf)?;
                     let s = String::from_utf8(buf).unwrap_or_else(|_| String::from("(非文本文件)"));
                     Ok(s)
-                }).await?
+                })
+                .await?
             }
             AnySftpSession::Russh(s) => {
                 let mut file = s.sftp.open(path).await?;
@@ -322,12 +338,15 @@ impl SftpSessionGuard {
                 let path = path.to_string();
                 let content = content.to_string();
                 tokio::task::spawn_blocking(move || {
-                    let guard = wrapper.lock().map_err(|_| anyhow::anyhow!("Lock poisoned"))?;
+                    let guard = wrapper
+                        .lock()
+                        .map_err(|_| anyhow::anyhow!("Lock poisoned"))?;
                     let mut file = guard.sftp.create(std::path::Path::new(&path))?;
                     use std::io::Write;
                     file.write_all(content.as_bytes())?;
                     Ok(())
-                }).await?
+                })
+                .await?
             }
             AnySftpSession::Russh(s) => {
                 let mut file = s.sftp.create(path).await?;
@@ -342,17 +361,20 @@ impl SftpSessionGuard {
             AnySftpSession::Ssh2(wrapper) => {
                 let path = path.to_string();
                 tokio::task::spawn_blocking(move || {
-                    let guard = wrapper.lock().map_err(|_| anyhow::anyhow!("Lock poisoned"))?;
+                    let guard = wrapper
+                        .lock()
+                        .map_err(|_| anyhow::anyhow!("Lock poisoned"))?;
                     let p = std::path::Path::new(&path);
                     if let Err(_) = guard.sftp.unlink(p) {
                         guard.sftp.rmdir(p)?;
                     }
                     Ok(())
-                }).await?
+                })
+                .await?
             }
             AnySftpSession::Russh(s) => {
                 if let Err(_) = s.sftp.remove_file(path).await {
-                     s.sftp.remove_dir(path).await?;
+                    s.sftp.remove_dir(path).await?;
                 }
                 Ok(())
             }
@@ -365,13 +387,16 @@ impl SftpSessionGuard {
                 let from = from.to_string();
                 let to_name = to_name.to_string();
                 tokio::task::spawn_blocking(move || {
-                    let guard = wrapper.lock().map_err(|_| anyhow::anyhow!("Lock poisoned"))?;
+                    let guard = wrapper
+                        .lock()
+                        .map_err(|_| anyhow::anyhow!("Lock poisoned"))?;
                     let from_path = std::path::Path::new(&from);
                     let parent = from_path.parent().unwrap_or(std::path::Path::new("/"));
                     let to_path = parent.join(&to_name);
                     guard.sftp.rename(from_path, &to_path, None)?;
                     Ok(())
-                }).await?
+                })
+                .await?
             }
             AnySftpSession::Russh(s) => {
                 // Russh expects full path for rename?
@@ -385,14 +410,21 @@ impl SftpSessionGuard {
         }
     }
 
-    pub async fn upload_base64(&self, dest_dir: &str, filename: &str, base64: &str) -> anyhow::Result<()> {
+    pub async fn upload_base64(
+        &self,
+        dest_dir: &str,
+        filename: &str,
+        base64: &str,
+    ) -> anyhow::Result<()> {
         match self.get_session_variant().await? {
             AnySftpSession::Ssh2(wrapper) => {
                 let dest_dir = dest_dir.to_string();
                 let filename = filename.to_string();
                 let base64 = base64.to_string();
                 tokio::task::spawn_blocking(move || {
-                    let guard = wrapper.lock().map_err(|_| anyhow::anyhow!("Lock poisoned"))?;
+                    let guard = wrapper
+                        .lock()
+                        .map_err(|_| anyhow::anyhow!("Lock poisoned"))?;
                     let decoded = BASE64_STANDARD.decode(base64)?;
                     let dest_path = if dest_dir.ends_with('/') {
                         format!("{}{}", dest_dir, filename)
@@ -404,7 +436,8 @@ impl SftpSessionGuard {
                     use std::io::Write;
                     file.write_all(&decoded)?;
                     Ok(())
-                }).await?
+                })
+                .await?
             }
             AnySftpSession::Russh(s) => {
                 let decoded = BASE64_STANDARD.decode(base64)?;
@@ -425,13 +458,16 @@ impl SftpSessionGuard {
             AnySftpSession::Ssh2(wrapper) => {
                 let path = path.to_string();
                 tokio::task::spawn_blocking(move || {
-                    let guard = wrapper.lock().map_err(|_| anyhow::anyhow!("Lock poisoned"))?;
+                    let guard = wrapper
+                        .lock()
+                        .map_err(|_| anyhow::anyhow!("Lock poisoned"))?;
                     let mut file = guard.sftp.open(std::path::Path::new(&path))?;
                     let mut buf = Vec::new();
                     use std::io::Read;
                     file.read_to_end(&mut buf)?;
                     Ok(buf)
-                }).await?
+                })
+                .await?
             }
             AnySftpSession::Russh(s) => {
                 let mut file = s.sftp.open(path).await?;
@@ -447,10 +483,13 @@ impl SftpSessionGuard {
             AnySftpSession::Ssh2(wrapper) => {
                 let path = path.to_string();
                 tokio::task::spawn_blocking(move || {
-                    let guard = wrapper.lock().map_err(|_| anyhow::anyhow!("Lock poisoned"))?;
+                    let guard = wrapper
+                        .lock()
+                        .map_err(|_| anyhow::anyhow!("Lock poisoned"))?;
                     guard.sftp.mkdir(std::path::Path::new(&path), 0o755)?;
                     Ok(())
-                }).await?
+                })
+                .await?
             }
             AnySftpSession::Russh(s) => {
                 s.sftp.create_dir(path).await?;
@@ -464,12 +503,15 @@ impl SftpSessionGuard {
             AnySftpSession::Ssh2(wrapper) => {
                 let path = path.to_string();
                 tokio::task::spawn_blocking(move || {
-                    let guard = wrapper.lock().map_err(|_| anyhow::anyhow!("Lock poisoned"))?;
+                    let guard = wrapper
+                        .lock()
+                        .map_err(|_| anyhow::anyhow!("Lock poisoned"))?;
                     let mut stat = guard.sftp.stat(std::path::Path::new(&path))?;
                     stat.perm = Some(mode as u32);
                     guard.sftp.setstat(std::path::Path::new(&path), stat)?;
                     Ok(())
-                }).await?
+                })
+                .await?
             }
             AnySftpSession::Russh(s) => {
                 // Russh sftp set_stat

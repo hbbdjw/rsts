@@ -25,6 +25,8 @@ const props = withDefaults(
     username?: string;
     password?: string;
     autoConnect?: boolean;
+    cursorBlink?: boolean;
+    cursorStyle?: 'block' | 'underline' | 'bar';
     theme?: Record<string, string>;
     fontSize?: number;
   }>(),
@@ -34,6 +36,8 @@ const props = withDefaults(
     username: '',
     password: '',
     autoConnect: false,
+    cursorBlink: true,
+    cursorStyle: 'block',
     theme: () => ({}),
     fontSize: 16
   }
@@ -119,8 +123,8 @@ const initTerminal = () => {
   if (terminalInstance.value) return;
 
   const terminal = new Terminal({
-    cursorBlink: true,
-    cursorStyle: 'block',
+    cursorBlink: props.cursorBlink,
+    cursorStyle: props.cursorStyle,
     fontSize: props.fontSize,
     fontFamily: 'Consolas, "Courier New", monospace',
     theme: {
@@ -448,10 +452,7 @@ defineExpose({
 </script>
 
 <template>
-  <div
-    class="relative h-full flex flex-col overflow-hidden"
-    :style="{ backgroundColor: backgroundColor }"
-  >
+  <div class="relative h-full flex flex-col overflow-hidden" :style="{ backgroundColor: backgroundColor }">
     <div
       ref="terminalContainer"
       class="relative w-full flex-1 overflow-hidden"

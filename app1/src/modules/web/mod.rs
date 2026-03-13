@@ -16,6 +16,7 @@ pub mod sqlite_api;
 pub mod ssh_servers_api;
 pub mod ssh_websocket;
 pub mod ssh_websocket_pty;
+pub mod ssh_monitor_api;
 pub mod template_engine;
 pub mod websocket;
 pub use actors::*;

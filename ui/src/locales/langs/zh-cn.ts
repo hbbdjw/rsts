@@ -228,6 +228,7 @@ const local: App.I18n.Schema = {
     home: '首页',
     ssh: 'SSH',
     tools: '工具',
+    tools_aichat: 'AIChat',
     tools_reqstudio: 'ReqStudio',
     tools_sqlstudio: 'SQLStudio',
     testbox: '测试盒子'

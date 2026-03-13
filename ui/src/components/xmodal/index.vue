@@ -25,6 +25,7 @@ interface Props {
   resizable?: boolean;
   shadow?: boolean;
   zIndex?: number;
+  cardContentPadding?: string;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -45,7 +46,8 @@ const props = withDefaults(defineProps<Props>(), {
   draggable: true,
   resizable: true,
   shadow: true,
-  zIndex: undefined
+  zIndex: undefined,
+  cardContentPadding: '8px 8px'
 });
 
 const showMask = computed(() => (props.showMask ?? props.mask) === true);
@@ -285,6 +287,10 @@ const wrapperClass = computed(() => ({
   'x-modal-inline': isInline.value,
   'x-modal-shadow': showShadow.value
 }));
+
+const cssVars = computed(() => ({
+  '--x-modal-n-card-content-padding': props.cardContentPadding
+}));
 </script>
 
 <template>
@@ -295,7 +301,6 @@ const wrapperClass = computed(() => ({
     :show-mask="showMask"
     :mask-closable="showMask"
     :to="to"
-    :preset="preset"
     :trap-focus="false"
     :block-scroll="false"
     :z-index="zIndex"
@@ -304,13 +309,16 @@ const wrapperClass = computed(() => ({
     <div
       class="x-modal-wrapper shadow-xs pointer-events-auto absolute flex flex-col rounded bg-white dark:bg-[#18181c]"
       :class="{ 'x-modal-maximized': isMaximized }"
-      :style="{
-        left: `${currentX}px`,
-        top: `${currentY}px`,
-        width: `${currentW}px`,
-        height: `${currentH}px`,
-        zIndex
-      }"
+      :style="[
+        {
+          left: `${currentX}px`,
+          top: `${currentY}px`,
+          width: `${currentW}px`,
+          height: `${currentH}px`,
+          zIndex
+        },
+        cssVars
+      ]"
       @mousedown="bringToFront"
     >
       <NCard class="x-modal-card h-full w-full flex flex-col" :bordered="true">
@@ -366,7 +374,7 @@ const wrapperClass = computed(() => ({
       <div
         class="x-modal-wrapper pointer-events-auto flex flex-col rounded bg-white dark:bg-[#18181c]"
         :class="[wrapperClass, { 'x-modal-maximized': isMaximized }]"
-        :style="wrapperStyle"
+        :style="[wrapperStyle, cssVars]"
         @mousedown="bringToFront"
       >
         <NCard class="x-modal-card h-full w-full flex flex-col" :bordered="showHeader">
@@ -459,10 +467,14 @@ const wrapperClass = computed(() => ({
   padding-right: 8px;
   border-bottom: 1px solid #e5e5e5;
 }
-:deep(.x-modal-card .n-card-footer) {
-  padding: 8px 8px;
+:deep(.x-modal-card) {
+  /* padding: 5px 5px; */
 }
-:deep(.x-modal-card .x-modal-wrapper) {
+:deep(.n-card__content) {
+  padding: var(--x-modal-n-card-content-padding, 8px 8px) !important;
+}
+:deep(.n-card__footer) {
+  padding: 5px 5px;
 }
 .resize-handle {
   position: absolute;

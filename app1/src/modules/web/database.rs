@@ -1,7 +1,7 @@
 use bcrypt;
 use chrono::Utc;
 use rusqlite::{Connection, Error, Result, params};
-use std::path::Path;
+use std::path::Path; 
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -12,7 +12,30 @@ pub struct Database {
 }
 
 impl Database {
-    // 创建新的数据库连接
+    // 获取用户终端配置
+    pub fn get_user_terminal_config(&self, username: &str) -> Result<Option<String>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare("SELECT terminal_setting_config FROM users WHERE username = ?1")?;
+        let mut rows = stmt.query(params![username])?;
+
+        if let Some(row) = rows.next()? {
+            let config: Option<String> = row.get(0)?;
+            Ok(config)
+        } else {
+            Ok(None)
+        }
+    }
+
+    // 更新用户终端配置
+    pub fn update_user_terminal_config(&self, username: &str, config: &str) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "UPDATE users SET terminal_setting_config = ?1 WHERE username = ?2",
+            params![config, username],
+        )?;
+        Ok(())
+    }
+
     pub fn new(db_path: &str) -> Result<Self> {
         // 确保数据库文件存在的目录
         if let Some(parent) = Path::new(db_path).parent() {
@@ -32,10 +55,15 @@ impl Database {
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 username TEXT NOT NULL UNIQUE,
                 password TEXT NOT NULL,
-                email TEXT
+                email TEXT,
+                theme_config TEXT,
+                terminal_setting_config TEXT
             )",
             [],
         )?;
+        
+        // 确保 terminal_setting_config 列存在 (针对已有数据库迁移)
+        let _ = conn.execute("ALTER TABLE users ADD COLUMN terminal_setting_config TEXT", []);
 
         // 创建websocket会话表
         conn.execute(
@@ -63,6 +91,23 @@ impl Database {
             [],
         )?;
 
+        // 创建SQLStudio连接配置表
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS sql_connections (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                db_type TEXT NOT NULL,
+                host TEXT NOT NULL,
+                port INTEGER NOT NULL,
+                username TEXT NOT NULL,
+                password TEXT,
+                database TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )",
+            [],
+        )?;
+
         // 检查是否有用户，如果没有则创建一个默认用户用于测试
         let count: i64 = conn.query_row("SELECT COUNT(*) FROM users", [], |row| row.get(0))?;
         if count == 0 {
@@ -86,6 +131,10 @@ impl Database {
         Ok(Self {
             conn: Arc::new(Mutex::new(conn)),
         })
+    }
+
+    pub fn get_conn(&self) -> Arc<Mutex<Connection>> {
+        self.conn.clone()
     }
 
     // 验证用户凭据（支持明文和bcrypt哈希）
@@ -318,5 +367,11 @@ impl super::database_models::DatabaseService for Database {
     }
     fn update_user_theme_config(&self, username: &str, theme_config: &str) -> Result<()> {
         self.update_user_theme_config(username, theme_config)
+    }
+    fn get_user_terminal_config(&self, username: &str) -> Result<Option<String>> {
+        self.get_user_terminal_config(username)
+    }
+    fn update_user_terminal_config(&self, username: &str, config: &str) -> Result<()> {
+        self.update_user_terminal_config(username, config)
     }
 }

@@ -1,7 +1,7 @@
 use super::actors::WsSshPtySession;
 use super::models::{AnyPtyClient, SendWsMessage, SetSshClient, SshCredentials};
-use crate::modules::ssh::ssh2_pty_client::Ssh2PtyClient;
 use crate::modules::ssh::russh_client::RusshClient;
+use crate::modules::ssh::ssh2_pty_client::Ssh2PtyClient;
 use actix::{Actor, ActorContext, AsyncContext, StreamHandler};
 use actix_web_actors::ws;
 use log::{error, info};
@@ -109,7 +109,7 @@ impl WsSshPtySession {
                 creds.username.clone(),
                 creds.password.clone(),
             );
-            
+
             let mut ssh2_failed = false;
             let mut ssh2_error = String::new();
 
@@ -139,13 +139,13 @@ impl WsSshPtySession {
                     client: AnyPtyClient::Ssh2(client_arc.clone()),
                     connected: true,
                 });
-                
+
                 // 发送连接成功消息
                 let connected_msg = serde_json::json!({"type": "connected","host": creds.hostname,"port": creds.port,"username": creds.username});
                 addr.do_send(SendWsMessage {
                     text: connected_msg.to_string(),
                 });
-                
+
                 // 处理输出
                 while let Some(data) = rx.recv().await {
                     let s = String::from_utf8_lossy(&data);
@@ -162,10 +162,10 @@ impl WsSshPtySession {
                     creds.username.clone(),
                     creds.password.clone(),
                 );
-                
+
                 if let Err(e_russh) = client_russh.connect().await {
                     let error_msg = serde_json::json!({
-                        "type": "error", 
+                        "type": "error",
                         "message": format!("SSH连接失败 (SSH2: {}, Russh: {})", ssh2_error, e_russh)
                     });
                     addr.do_send(SendWsMessage {
@@ -173,7 +173,7 @@ impl WsSshPtySession {
                     });
                     return;
                 }
-                
+
                 if let Err(e) = client_russh.create_pty_session(cols, rows).await {
                     let error_msg = serde_json::json!({"type": "error", "message": format!("Russh创建PTY失败: {}", e)});
                     addr.do_send(SendWsMessage {
@@ -181,7 +181,7 @@ impl WsSshPtySession {
                     });
                     return;
                 }
-                
+
                 let (tx, mut rx) = mpsc::unbounded_channel::<Vec<u8>>();
                 if let Err(e) = client_russh.start_pty_io(tx).await {
                     let error_msg = serde_json::json!({"type": "error", "message": format!("Russh启动PTY IO失败: {}", e)});
@@ -190,18 +190,18 @@ impl WsSshPtySession {
                     });
                     return;
                 }
-                
+
                 let client_arc = Arc::new(Mutex::new(client_russh));
                 addr.do_send(SetSshClient {
                     client: AnyPtyClient::Russh(client_arc.clone()),
                     connected: true,
                 });
-                
+
                 let connected_msg = serde_json::json!({"type": "connected","host": creds.hostname,"port": creds.port,"username": creds.username});
                 addr.do_send(SendWsMessage {
                     text: connected_msg.to_string(),
                 });
-                
+
                 while let Some(data) = rx.recv().await {
                     let s = String::from_utf8_lossy(&data);
                     let output_msg = serde_json::json!({"type": "output","data": s, "content": s});

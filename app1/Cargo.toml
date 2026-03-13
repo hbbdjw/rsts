@@ -16,6 +16,7 @@ axum = { version = "0.8.8", features = ["ws", "json"] }
 sqlx = { version = "0.8.6", default-features = false, features = ["postgres", "runtime-tokio"] }
 tower-http = { version = "0.6.8", features = ["cors", "trace"] }
 dotenvy = "0.15.7"
+actix-cors = "0.7.0"
 bcrypt = "0.18.0"
 jsonwebtoken = { version = "10.3.0", features = ["rust_crypto"] }
 rand = "0.8"
@@ -49,6 +50,7 @@ tokio-postgres = "0.7.16"
 flate2 = "1.1.9"
 jni = "0.21.1"
 bincode = "1.3.3"
+once_cell = "1.21.4"
 
 [features]
 simd = []

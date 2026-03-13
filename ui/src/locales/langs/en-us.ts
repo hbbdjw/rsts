@@ -232,6 +232,7 @@ const local: App.I18n.Schema = {
     home: 'Home',
     ssh: 'SSH',
     tools: 'Tools',
+    tools_aichat: 'AIChat',
     tools_reqstudio: 'ReqStudio',
     tools_sqlstudio: 'SQLStudio',
     testbox: 'Testbox'

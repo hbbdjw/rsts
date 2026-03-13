@@ -1,4 +1,4 @@
-import { request } from '../request';
+import { request } from '@/service/request';
 
 /** get user theme config */
 export function fetchUserThemeConfig() {

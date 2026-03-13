@@ -93,7 +93,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div ref="rootRef" class="h-full w-full flex items-center overflow-hidden ">
+  <div ref="rootRef" class="h-full w-full flex items-center overflow-hidden">
     <NTabs
       v-if="connections.length > 0"
       type="card"

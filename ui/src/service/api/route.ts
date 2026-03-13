@@ -1,4 +1,4 @@
-import { request } from '../request';
+import { request } from '@/service/request';
 
 /** get constant routes */
 export function fetchGetConstantRoutes() {

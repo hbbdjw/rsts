@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, reactive, ref } from 'vue';
+import { computed, defineAsyncComponent, onMounted, reactive, ref } from 'vue';
+import { useMessage } from 'naive-ui';
+import { request } from '@/service/request';
 import XModal from '@/components/xmodal/index.vue';
 import Group from './modules/Group.vue';
 import Info from './modules/Info.vue';
@@ -32,10 +34,38 @@ const detachedSessions = ref<DetachedSession[]>([]);
 const terminalRefs = ref<Record<string, any>>({});
 const fileManagerRefs = ref<Record<string, any>>({});
 
+const message = useMessage();
+
 const terminalSettings = reactive({
   fontSize: 14,
   background: '#1e1e1e',
-  foreground: '#d4d4d4'
+  foreground: '#d4d4d4',
+  cursor: '#ffffff',
+  cursorStyle: 'block' as 'block' | 'underline' | 'bar',
+  cursorBlink: true
+});
+
+onMounted(async () => {
+  // Load terminal config from backend
+  try {
+    const { data } = await request<{ config: string }>({
+      url: '/api/user/terminal-config',
+      method: 'get'
+    });
+    if (data?.config) {
+      const config = JSON.parse(data.config);
+      if (config.fontSize) terminalSettings.fontSize = config.fontSize;
+      if (config.theme) {
+        if (config.theme.background) terminalSettings.background = config.theme.background;
+        if (config.theme.foreground) terminalSettings.foreground = config.theme.foreground;
+        if (config.theme.cursor) terminalSettings.cursor = config.theme.cursor;
+      }
+      if (config.cursorStyle) terminalSettings.cursorStyle = config.cursorStyle;
+      if (typeof config.cursorBlink === 'boolean') terminalSettings.cursorBlink = config.cursorBlink;
+    }
+  } catch (e) {
+    // console.error('Failed to load terminal config:', e);
+  }
 });
 
 const activeSession = computed(() => {
@@ -86,18 +116,46 @@ const handleStatusChange = (sessionId: string, status: any) => {
   }
 };
 
-const handleSettingsUpdate = (settings: any) => {
+const handleSettingsUpdate = async (settings: any) => {
+  // Update local state
   if (settings.fontSize) terminalSettings.fontSize = settings.fontSize;
   if (settings.theme) {
     if (settings.theme.background) terminalSettings.background = settings.theme.background;
     if (settings.theme.foreground) terminalSettings.foreground = settings.theme.foreground;
+    if (settings.theme.cursor) terminalSettings.cursor = settings.theme.cursor;
   }
+  if (settings.cursorStyle) terminalSettings.cursorStyle = settings.cursorStyle;
+  if (typeof settings.cursorBlink === 'boolean') terminalSettings.cursorBlink = settings.cursorBlink;
 
+  // Update active terminals
   Object.values(terminalRefs.value).forEach((terminal: any) => {
     if (terminal && terminal.setOptions) {
       terminal.setOptions(settings);
     }
   });
+
+  // Save to backend
+  try {
+    await request({
+      url: '/api/user/terminal-config',
+      method: 'post',
+      data: {
+        config: JSON.stringify({
+          fontSize: terminalSettings.fontSize,
+          theme: {
+            background: terminalSettings.background,
+            foreground: terminalSettings.foreground,
+            cursor: terminalSettings.cursor
+          },
+          cursorStyle: terminalSettings.cursorStyle,
+          cursorBlink: terminalSettings.cursorBlink
+        })
+      }
+    });
+    // message.success('Settings saved');
+  } catch (e) {
+    message.error('Failed to save settings');
+  }
 };
 
 const handleCloseTab = (sessionId: string) => {
@@ -230,8 +288,8 @@ const handleModalFocus = (id: string) => {
       <template #2>
         <NSplit direction="vertical" :default-size="0.8" :min="0.2" :max="0.8">
           <template #1>
-            <div class="h-full flex flex-col p-4px overflow-hidden">
-              <div class="border-gray-200 dark:border-gray-700">
+            <div class="h-full flex flex-col overflow-hidden p-4px">
+              <div class="border-gray-200 dark:border-gray-700" style="border-bottom: 1px solid;">
                 <Info
                   v-model:active-id="activeSessionId"
                   :connections="connectionsForInfo"
@@ -239,8 +297,9 @@ const handleModalFocus = (id: string) => {
                   @detach="handleDetach"
                 />
               </div>
-              <div class="relative flex-1 overflow-hidden ">
-                <div v-if="sessions.length === 0"
+              <div class="relative flex-1 overflow-hidden">
+                <div
+                  v-if="sessions.length === 0"
                   class="absolute inset-0 flex items-center justify-center text-gray-400"
                 >
                   Select a server to connect
@@ -248,6 +307,7 @@ const handleModalFocus = (id: string) => {
 
                 <div v-for="session in sessions" :key="`local-wrapper-${session.id}`" class="h-full w-full">
                   <XModal
+                    card-content-padding="0px"
                     :show="isModalVisible(session.id)"
                     :title="getSessionTitle(session.id)"
                     :x="getDetachedSession(session.id)?.x ?? 0"
@@ -303,9 +363,12 @@ const handleModalFocus = (id: string) => {
                           :auto-connect="true"
                           :theme="{
                             background: terminalSettings.background,
-                            foreground: terminalSettings.foreground
+                            foreground: terminalSettings.foreground,
+                            cursor: terminalSettings.cursor
                           }"
                           :font-size="terminalSettings.fontSize"
+                          :cursor-style="terminalSettings.cursorStyle"
+                          :cursor-blink="terminalSettings.cursorBlink"
                           @status-change="status => handleStatusChange(session.id, status)"
                           @cwd-change="path => handleCwdChange(session.id, path)"
                         />
@@ -322,7 +385,10 @@ const handleModalFocus = (id: string) => {
                 <ServerMonitor
                   v-if="activeSession?.status?.connected"
                   class="pointer-events-none absolute inset-0 z-[100]"
-                  :session="activeSession"
+                  :hostname="activeSession?.connection?.hostname"
+                  :port="activeSession?.connection?.port"
+                  :username="activeSession?.connection?.username"
+                  :password="activeSession?.connection?.password"
                   :initial-settings="terminalSettings"
                   @update-settings="handleSettingsUpdate"
                 />
@@ -334,7 +400,6 @@ const handleModalFocus = (id: string) => {
               <div v-if="sessions.length === 0" class="absolute inset-0 flex items-center justify-center text-gray-400">
                 No active session
               </div>
-
               <div
                 v-for="session in sessions"
                 v-show="fileListSessionId === session.id"

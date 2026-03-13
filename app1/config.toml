@@ -2,7 +2,7 @@
 
 [server]
 enable = true
-port = 8000
+port = 8001
 host = "0.0.0.0"
 database_path = "F:/yuanma/rust/rsts/app1/db/rsts.db"
 

@@ -192,7 +192,10 @@ impl RusshClient {
 
     pub async fn resize_pty(&self, width: u32, height: u32) -> Result<()> {
         if let Some(ref tx) = self.input_tx {
-            info!("RusshClient: 通过输入队列发送Resize请求: {}x{}", width, height);
+            info!(
+                "RusshClient: 通过输入队列发送Resize请求: {}x{}",
+                width, height
+            );
             tx.send(RusshInputEvent::Resize(width, height))
                 .map_err(|_| anyhow::anyhow!("输入通道发送失败"))?;
             Ok(())
