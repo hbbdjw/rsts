@@ -6,13 +6,106 @@ pub mod sqlite;
 
 use self::models::{
     CreateConnectionRequest, MetadataRequest, SqlConnection, TestConnectionRequest,
-    UpdateConnectionRequest, DeleteConnectionRequest,
+    UpdateConnectionRequest, DeleteConnectionRequest, TableDataRequest, ExecuteSqlRequest,
 };
 use crate::modules::web::database::Database;
 use actix_web::{HttpResponse, Responder, web};
 use chrono::Utc;
 use rusqlite::params;
 use std::sync::Arc;
+
+pub async fn execute_sql_handler(
+    req: web::Json<ExecuteSqlRequest>,
+    db: web::Data<Arc<Database>>,
+) -> impl Responder {
+    let conn_arc = db.get_conn();
+    let conn = conn_arc.lock().unwrap();
+    let conn_query = conn.query_row(
+        "SELECT id, name, db_type, host, port, username, password, database FROM sql_connections WHERE id = ?1",
+        params![req.connection_id],
+        |row| {
+            Ok(SqlConnection {
+                id: Some(row.get(0)?),
+                name: row.get(1)?,
+                db_type: row.get(2)?,
+                host: row.get(3)?,
+                port: row.get(4)?,
+                username: row.get(5)?,
+                password: row.get(6)?,
+                database: row.get(7)?,
+                created_at: None,
+                updated_at: None,
+            })
+        }
+    );
+
+    match conn_query {
+        Ok(sql_conn) => match sql_conn.db_type.as_str() {
+            "postgresql" => {
+                match postgresql::execute_sql(&sql_conn, &req).await {
+                    Ok(data) => {
+                        HttpResponse::Ok().json(serde_json::json!({ "code": 0, "data": data }))
+                    }
+                    Err(e) => HttpResponse::Ok().json(serde_json::json!({ "code": 1, "msg": e })),
+                }
+            }
+            _ => HttpResponse::Ok()
+                .json(serde_json::json!({ "code": 1, "msg": "Database type not supported yet" })),
+        },
+        Err(rusqlite::Error::QueryReturnedNoRows) => {
+            HttpResponse::Ok().json(serde_json::json!({ "code": 1, "msg": "Connection not found" }))
+        }
+        Err(e) => HttpResponse::InternalServerError()
+            .json(serde_json::json!({ "code": 1, "msg": e.to_string() })),
+    }
+}
+
+pub async fn get_table_data_handler(
+    req: web::Json<TableDataRequest>,
+    db: web::Data<Arc<Database>>,
+) -> impl Responder {
+    let conn_arc = db.get_conn();
+    let conn = conn_arc.lock().unwrap();
+    // Fetch connection details from SQLite
+    let conn_query = conn.query_row(
+        "SELECT id, name, db_type, host, port, username, password, database FROM sql_connections WHERE id = ?1",
+        params![req.connection_id],
+        |row| {
+            Ok(SqlConnection {
+                id: Some(row.get(0)?),
+                name: row.get(1)?,
+                db_type: row.get(2)?,
+                host: row.get(3)?,
+                port: row.get(4)?,
+                username: row.get(5)?,
+                password: row.get(6)?,
+                database: row.get(7)?,
+                created_at: None,
+                updated_at: None,
+            })
+        }
+    );
+
+    match conn_query {
+        Ok(sql_conn) => match sql_conn.db_type.as_str() {
+            "postgresql" => {
+                match postgresql::get_table_data(&sql_conn, &req).await {
+                    Ok(data) => {
+                        HttpResponse::Ok().json(serde_json::json!({ "code": 0, "data": data }))
+                    }
+                    Err(e) => HttpResponse::Ok().json(serde_json::json!({ "code": 1, "msg": e })),
+                }
+            }
+            _ => HttpResponse::Ok()
+                .json(serde_json::json!({ "code": 1, "msg": "Database type not supported yet" })),
+        },
+        Err(rusqlite::Error::QueryReturnedNoRows) => {
+            HttpResponse::Ok().json(serde_json::json!({ "code": 1, "msg": "Connection not found" }))
+        }
+        Err(e) => HttpResponse::InternalServerError()
+            .json(serde_json::json!({ "code": 1, "msg": e.to_string() })),
+    }
+}
 
 pub async fn test_connection_handler(req: web::Json<TestConnectionRequest>) -> impl Responder {
     match req.db_type.as_str() {

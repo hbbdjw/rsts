@@ -21,9 +21,9 @@ export const views: Record<LastLevelRouteKey, RouteComponent | (() => Promise<Ro
   "iframe-page": () => import("@/views/_builtin/iframe-page/[url].vue"),
   login: () => import("@/views/_builtin/login/index.vue"),
   home: () => import("@/views/home/index.vue"),
-  ssh: () => import("@/views/ssh/index.vue"),
   testbox: () => import("@/views/testbox/index.vue"),
   tools_aichat: () => import("@/views/tools/aichat/index.vue"),
   tools_reqstudio: () => import("@/views/tools/reqstudio/index.vue"),
   tools_sqlstudio: () => import("@/views/tools/sqlstudio/index.vue"),
+  tools_ssh: () => import("@/views/tools/ssh/index.vue"),
 };

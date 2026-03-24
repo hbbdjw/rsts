@@ -46,6 +46,7 @@ use crate::modules::sftp::service::SftpService; // 导入SftpService
 use crate::modules::sqlstudio::{
     create_connection_handler, get_metadata_handler, list_connections_handler,
     test_connection_handler, update_connection_handler, delete_connection_handler,
+    get_table_data_handler, execute_sql_handler,
 };
 use crate::modules::ssh::SshService; // 从ssh模块导入SshService
 use crate::modules::task::api::{start_task, stop_task, task_status};
@@ -230,6 +231,14 @@ pub async fn setup_actix() -> Result<Server, std::io::Error> {
             .route(
                 "/api/sqlstudio/connection/metadata",
                 web::post().to(get_metadata_handler),
+            )
+            .route(
+                "/api/sqlstudio/connection/table-data",
+                web::post().to(get_table_data_handler),
+            )
+            .route(
+                "/api/sqlstudio/connection/execute",
+                web::post().to(execute_sql_handler),
             )
             // Chat 媒体上传 API 路由
             .route("/api/chat/upload", web::post().to(chat_upload_media))

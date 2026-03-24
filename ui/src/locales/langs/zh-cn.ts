@@ -226,11 +226,12 @@ const local: App.I18n.Schema = {
     500: '服务器错误',
     'iframe-page': '外链页面',
     home: '首页',
-    ssh: 'SSH',
+    
     tools: '工具',
     tools_aichat: 'AIChat',
     tools_reqstudio: 'ReqStudio',
     tools_sqlstudio: 'SQLStudio',
+    tools_ssh: 'SSH',
     testbox: '测试盒子'
   },
   page: {

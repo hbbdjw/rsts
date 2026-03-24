@@ -23,12 +23,12 @@ declare module "@elegant-router/types" {
     "home": "/home";
     "iframe-page": "/iframe-page/:url";
     "login": "/login/:module(pwd-login|code-login|register|reset-pwd|bind-wechat)?";
-    "ssh": "/ssh";
     "testbox": "/testbox";
     "tools": "/tools";
     "tools_aichat": "/tools/aichat";
     "tools_reqstudio": "/tools/reqstudio";
     "tools_sqlstudio": "/tools/sqlstudio";
+    "tools_ssh": "/tools/ssh";
   };
 
   /**
@@ -66,7 +66,6 @@ declare module "@elegant-router/types" {
     | "home"
     | "iframe-page"
     | "login"
-    | "ssh"
     | "testbox"
     | "tools"
   >;
@@ -91,11 +90,11 @@ declare module "@elegant-router/types" {
     | "iframe-page"
     | "login"
     | "home"
-    | "ssh"
     | "testbox"
     | "tools_aichat"
     | "tools_reqstudio"
     | "tools_sqlstudio"
+    | "tools_ssh"
   >;
 
   /**

@@ -29,6 +29,7 @@ import {
 } from '@vicons/ionicons5';
 import { getServiceBaseURL } from '@/utils/service';
 import XModal from '@/components/xmodal/index.vue';
+import { useSqlStudioStore } from '@/store/modules/sqlstudio';
 
 defineOptions({
   name: 'SqlStudioMenuPanel'
@@ -100,6 +101,7 @@ type SqlTreeNode = TreeOption & {
 
 const message = useMessage();
 const dialog = useDialog();
+const store = useSqlStudioStore();
 
 // Context Menu State
 const showDropdown = ref(false);
@@ -530,28 +532,21 @@ async function handleLoad(rawNode: TreeOption) {
     } else if (node.type === 'category') {
       await loadSavedCategoryNode(node);
     }
-    return;
+  } else {
+    // SQLite Logic
+    if (node.type === 'connection') {
+      loadConnectionNode(node);
+    } else if (node.type === 'database') {
+      loadDatabaseNode(node);
+    } else if (node.type === 'schema') {
+      loadSchemaNode(node);
+    } else if (node.type === 'category') {
+      await loadCategoryNode(node);
+    }
   }
-
-  // SQLite Logic
-  if (node.type === 'connection') {
-    loadConnectionNode(node);
-    return;
-  }
-
-  if (node.type === 'database') {
-    loadDatabaseNode(node);
-    return;
-  }
-
-  if (node.type === 'schema') {
-    loadSchemaNode(node);
-    return;
-  }
-
-  if (node.type === 'category') {
-    await loadCategoryNode(node);
-  }
+  
+  // 强制触发更新，确保视图能感知到 children 的变化
+  node.children = [...(node.children || [])];
 }
 
 function handleUpdateExpandedKeys(keys: string[]) {
@@ -723,7 +718,28 @@ const nodeProps = ({ option }: { option: TreeOption }) => {
       e.stopPropagation();
 
       // 如果是叶子节点，不处理展开
-      if (option.isLeaf) return;
+      if (option.isLeaf) {
+        const node = option as SqlTreeNode;
+        if (node.type === 'object' && node.meta?.objectType === 'table') {
+          const { connectionId, dbName, schemaName, isSqlite } = node.meta || {};
+          if (connectionId && dbName && schemaName) {
+            store.setTable({
+              connectionId,
+              database: dbName,
+              schema: schemaName,
+              table: node.label
+            });
+          } else if (isSqlite && dbName) {
+            store.setTable({
+              connectionId: 0,
+              database: dbName,
+              schema: 'main',
+              table: node.label
+            });
+          }
+        }
+        return;
+      }
 
       const key = option.key as string;
       const index = expandedKeys.value.indexOf(key);
@@ -734,9 +750,25 @@ const nodeProps = ({ option }: { option: TreeOption }) => {
         return;
       }
 
-      // 使用新数组赋值以确保响应式更新
+      // 展开
       expandedKeys.value = [...expandedKeys.value, key];
-      await handleLoad(option);
+
+      const node = option as SqlTreeNode;
+      // 如果没有子节点且不是叶子节点，手动加载
+      if ((!node.children || node.children.length === 0) && !node.isLeaf) {
+        const originalPrefix = node.prefix;
+        // 临时显示 loading 图标
+        node.prefix = () => h(NSpin, { size: 18 });
+        try {
+          await handleLoad(node);
+        } catch (error) {
+          console.error('加载失败:', error);
+          message.error('加载失败');
+        } finally {
+          // 恢复原始图标
+          node.prefix = originalPrefix;
+        }
+      }
     }
   };
 };
@@ -762,8 +794,8 @@ onMounted(buildRootTree);
         </template>
       </NButton>
     </div>
-    <div class="flex-1 overflow-hidden">
-      <NSpin :show="loading" class="h-full">
+    <div class="flex-1 overflow-y-auto">
+      <NSpin :show="loading" class="min-h-full">
         <NTree
           :data="treeData"
           block-line

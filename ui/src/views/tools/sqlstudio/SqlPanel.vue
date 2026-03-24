@@ -4,6 +4,47 @@ import { Play } from '@vicons/ionicons5';
 import { MagicWand } from '@vicons/carbon';
 import { VueMonacoEditor } from '@guolao/vue-monaco-editor';
 import type { editor as MonacoEditor } from 'monaco-editor';
+import { useSqlStudioStore } from '@/store/modules/sqlstudio';
+
+const store = useSqlStudioStore();
+const editorRef = ref<any>(null);
+const monacoRef = ref<any>(null);
+
+// 注册 SQL 自动补全
+const registerCompletion = (monaco: any) => {
+  monaco.languages.registerCompletionItemProvider('sql', {
+    triggerCharacters: [' ', '.', '\n'],
+    provideCompletionItems: (model: any, position: any) => {
+      const word = model.getWordUntilPosition(position);
+      const range = {
+        startLineNumber: position.lineNumber,
+        endLineNumber: position.lineNumber,
+        startColumn: word.startColumn,
+        endColumn: word.endColumn
+      };
+
+      const suggestions = [
+        // SQL 关键字
+        ...['SELECT', 'FROM', 'WHERE', 'INSERT', 'UPDATE', 'DELETE', 'GROUP BY', 'ORDER BY', 'HAVING', 'LIMIT', 'OFFSET', 'JOIN', 'LEFT JOIN', 'RIGHT JOIN', 'INNER JOIN', 'ON', 'AS', 'DISTINCT', 'VALUES', 'SET', 'AND', 'OR', 'NOT', 'NULL', 'IS', 'IN', 'BETWEEN', 'LIKE', 'CREATE', 'DROP', 'ALTER', 'TABLE', 'DATABASE', 'VIEW', 'INDEX', 'PRIMARY KEY', 'FOREIGN KEY', 'REFERENCES', 'DEFAULT', 'UNIQUE', 'CHECK', 'CONSTRAINT', 'CASE', 'WHEN', 'THEN', 'ELSE', 'END', 'UNION', 'ALL', 'EXISTS', 'ANY', 'SOME'].map(k => ({
+          label: k,
+          kind: monaco.languages.CompletionItemKind.Keyword,
+          insertText: k,
+          range
+        })),
+        // 常用函数
+        ...['COUNT', 'SUM', 'AVG', 'MAX', 'MIN', 'NOW', 'DATE', 'IFNULL', 'COALESCE', 'CONCAT', 'SUBSTRING', 'TRIM', 'UPPER', 'LOWER'].map(f => ({
+          label: f,
+          kind: monaco.languages.CompletionItemKind.Function,
+          insertText: f + '($0)',
+          insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+          range
+        }))
+      ];
+      
+      return { suggestions };
+    }
+  });
+};
 
 // 编辑器完整配置（带中文注释）
 const editorOptions: MonacoEditor.IStandaloneEditorConstructionOptions = {
@@ -55,9 +96,16 @@ const editorOptions: MonacoEditor.IStandaloneEditorConstructionOptions = {
   // —— 建议与提示 ——
   links: true, // 使链接可点击
   codeLens: false, // 代码透镜（上方小信息）
-  quickSuggestions: { other: true, comments: false, strings: false }, // 快速建议源
-  quickSuggestionsDelay: 200, // 快速建议延迟
+  quickSuggestions: { other: true, comments: true, strings: true }, // 快速建议源
+  quickSuggestionsDelay: 10, // 快速建议延迟
   parameterHints: { enabled: true, cycle: true }, // 参数提示
+  suggestOnTriggerCharacters: true,
+  acceptSuggestionOnEnter: 'on',
+  tabCompletion: 'on',
+  wordBasedSuggestions: 'allDocuments',
+  suggest: {
+    snippetsPreventQuickSuggestions: false,
+  },
 
   // —— 格式化 ——
   formatOnPaste: true, // 粘贴时格式化
@@ -68,7 +116,37 @@ const editorOptions: MonacoEditor.IStandaloneEditorConstructionOptions = {
 };
 
 const code = ref('');
-const handleMount = (_editor: any) => {};
+const handleMount = (editor: any, monaco: any) => {
+  editorRef.value = editor;
+  monacoRef.value = monaco;
+  registerCompletion(monaco);
+};
+
+function handleExecute() {
+  let sql = code.value;
+  // If there is a selection, execute only selected text
+  const editor = editorRef.value;
+  if (editor) {
+    const selection = editor.getSelection();
+    if (selection && !selection.isEmpty()) {
+      sql = editor.getModel().getValueInRange(selection);
+    }
+  }
+
+  if (!sql || !sql.trim()) {
+    return;
+  }
+  
+  store.executeSql(sql);
+}
+
+// F5 快捷键执行
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'F5') {
+    e.preventDefault();
+    handleExecute();
+  }
+});
 </script>
 
 <template>
@@ -76,7 +154,7 @@ const handleMount = (_editor: any) => {};
     <div class="shrink-0">
       <NSpace :size="5">
         <NButtonGroup size="small">
-          <NButton ghost>
+          <NButton ghost @click="handleExecute" :loading="store.loading" title="运行 (F5)">
             <template #icon>
               <NIcon color="green">
                 <Play />

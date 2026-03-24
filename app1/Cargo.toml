@@ -7,13 +7,13 @@ edition = "2024"
 [dependencies]
 tokio = { version = "1.49.0", features = ["full"] }
 futures = "0.3.31"
-rusqlite = { version = "0.38.0", features = ["bundled"] }
+rusqlite = { version = "0.30.0", features = ["bundled"] }
 actix = "0.13.5"
 actix-web = "4.12.1"
 actix-rt = "2.11.0"
 actix-web-actors = "4.3.0"
 axum = { version = "0.8.8", features = ["ws", "json"] }
-sqlx = { version = "0.8.6", default-features = false, features = ["postgres", "runtime-tokio"] }
+sqlx = { version = "0.7.4", default-features = false, features = ["postgres", "runtime-tokio", "chrono"] }
 tower-http = { version = "0.6.8", features = ["cors", "trace"] }
 dotenvy = "0.15.7"
 actix-cors = "0.7.0"

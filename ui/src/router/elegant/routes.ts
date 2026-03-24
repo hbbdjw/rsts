@@ -76,15 +76,6 @@ export const generatedRoutes: GeneratedRoute[] = [
     }
   },
   {
-    name: 'ssh',
-    path: '/ssh',
-    component: 'layout.base$view.ssh',
-    meta: {
-      title: 'ssh',
-      i18nKey: 'route.ssh'
-    }
-  },
-  {
     name: 'testbox',
     path: '/testbox',
     component: 'layout.base$view.testbox',
@@ -127,6 +118,15 @@ export const generatedRoutes: GeneratedRoute[] = [
         meta: {
           title: 'sql',
           i18nKey: 'route.tools_sqlstudio'
+        }
+      },
+      {
+        name: 'tools_ssh',
+        path: '/tools/ssh',
+        component: 'view.tools_ssh',
+        meta: {
+          title: 'tools_ssh',
+          i18nKey: 'route.tools_ssh'
         }
       }
     ]

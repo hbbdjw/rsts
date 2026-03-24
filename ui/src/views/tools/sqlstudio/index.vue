@@ -6,7 +6,7 @@ import ResultPanel from './ResultPanel.vue';
 
 <template>
   <div class="h-full w-full overflow-hidden">
-    <NSplit direction="horizontal" :min="0.1" :max="0.9" :default-size="0.1" :resize-trigger-size="2">
+    <NSplit direction="horizontal" :min="0.1" :max="0.9" :default-size="0.2" :resize-trigger-size="2">
       <template #resize-trigger>
         <div class="h-full w-full flex items-center justify-center">
           <div class="pointer-events-none h-full w-px bg-gray-300 dark:bg-gray-600"></div>
@@ -16,7 +16,7 @@ import ResultPanel from './ResultPanel.vue';
         <MenuPanel />
       </template>
       <template #2>
-        <NSplit direction="vertical" :min="0.1" :max="0.9" :default-size="0.5" :resize-trigger-size="2">
+        <NSplit direction="vertical" :min="0.1" :max="0.9" :default-size="0.6" :resize-trigger-size="2">
           <template #resize-trigger>
             <div class="h-full w-full flex items-center justify-center">
               <div class="pointer-events-none h-px w-full bg-gray-300 dark:bg-gray-600"></div>
@@ -28,7 +28,7 @@ import ResultPanel from './ResultPanel.vue';
             </div>
           </template>
           <template #2>
-            <div class="h-full w-full overflow-auto">
+            <div class="h-full w-full overflow-hidden">
               <ResultPanel />
             </div>
           </template>
